@@ -1,0 +1,131 @@
+/**
+ * Hobbies page styles.
+ */
+
+.hobbies-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.add-link-button {
+  background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
+  color: white;
+  text-decoration: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: inline-block;
+}
+
+.add-link-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(138, 43, 226, 0.4);
+}
+
+.error-message {
+  background: rgba(220, 53, 69, 0.2);
+  border: 1px solid rgba(220, 53, 69, 0.5);
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: #ff6b6b;
+  text-align: center;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: rgba(26, 26, 46, 0.4);
+  border: 1px dashed rgba(138, 43, 226, 0.3);
+  border-radius: 12px;
+}
+
+.empty-message {
+  font-size: 1.5rem;
+  color: #9370db;
+  margin: 0 0 0.5rem;
+}
+
+.empty-hint {
+  color: #b8b8d4;
+  margin: 0 0 2rem;
+}
+
+.card-description {
+  color: #b8b8d4;
+  margin: 0.75rem 0;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.card-category {
+  margin: 1rem 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.category-label {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.category-value {
+  color: #d4af37;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.tag {
+  background: rgba(138, 43, 226, 0.2);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 12px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  color: #ba55d3;
+}
+
+.card-footer {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(138, 43, 226, 0.2);
+}
+
+.view-items-link {
+  color: #9370db;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: color 0.3s ease;
+}
+
+.view-items-link:hover {
+  color: #ba55d3;
+  text-decoration: underline;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .hobbies-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .add-link-button {
+    text-align: center;
+  }
+}
+

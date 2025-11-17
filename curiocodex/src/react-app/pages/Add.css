@@ -1,0 +1,177 @@
+/**
+ * Add page styles - Form for creating hobbies and items.
+ */
+
+.add-form-container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.type-selector {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.type-button {
+  flex: 1;
+  background: rgba(26, 26, 46, 0.6);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  color: #b8b8d4;
+  font-size: 1.1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.type-button:hover {
+  border-color: rgba(138, 43, 226, 0.6);
+  background: rgba(26, 26, 46, 0.8);
+  transform: translateY(-2px);
+}
+
+.type-button.active {
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.3) 0%, rgba(147, 112, 219, 0.2) 100%);
+  border-color: rgba(138, 43, 226, 0.6);
+  color: #9370db;
+  box-shadow: 0 4px 12px rgba(138, 43, 226, 0.2);
+}
+
+.add-form {
+  background: rgba(26, 26, 46, 0.6);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 12px;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  color: #9370db;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  background: rgba(10, 10, 15, 0.6);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: #e0e0e0;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: all 0.3s ease;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: rgba(138, 43, 226, 0.6);
+  box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.1);
+}
+
+.form-input:disabled,
+.form-select:disabled,
+.form-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: #888;
+}
+
+.form-select {
+  cursor: pointer;
+}
+
+.form-select option {
+  background: #1a1a2e;
+  color: #e0e0e0;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-hint {
+  font-size: 0.85rem;
+  color: #888;
+  margin: 0;
+  font-style: italic;
+}
+
+.error-message {
+  background: rgba(220, 53, 69, 0.2);
+  border: 1px solid rgba(220, 53, 69, 0.5);
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: #ff6b6b;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.success-message {
+  background: rgba(40, 167, 69, 0.2);
+  border: 1px solid rgba(40, 167, 69, 0.5);
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: #51cf66;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.submit-button {
+  background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
+  border: none;
+  border-radius: 8px;
+  padding: 1rem 2rem;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 0.5rem;
+}
+
+.submit-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(138, 43, 226, 0.4);
+}
+
+.submit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .add-form-container {
+    max-width: 100%;
+  }
+  
+  .add-form {
+    padding: 1.5rem;
+  }
+  
+  .type-selector {
+    flex-direction: column;
+  }
+}
+

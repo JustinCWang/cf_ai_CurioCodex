@@ -2,8 +2,11 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "curiocodex",
   "main": "./src/worker/index.ts",
-  "compatibility_date": "2025-10-08",
+  "compatibility_date": "2025-06-17",
   "compatibility_flags": ["nodejs_compat"],
+  "ai": {
+    "binding": "AI"
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -18,6 +21,14 @@
       "preview_id": "e4ae434ecd6443cbaf856053b78ab977"
     }
   ],
+  // Vectorize commented out for local dev (Windows filename issues)
+  // Uncomment before deploying to production!
+  // "vectorize": [
+  //   {
+  //     "binding": "HOBBY_ITEMS_INDEX",
+  //     "index_name": "hobby-items-index"
+  //   }
+  // ],
   "observability": {
     "enabled": true
   },
