@@ -21,14 +21,12 @@
       "preview_id": "e4ae434ecd6443cbaf856053b78ab977"
     }
   ],
-  // Vectorize commented out for local dev (Windows filename issues)
-  // Uncomment before deploying to production!
-  // "vectorize": [
-  //   {
-  //     "binding": "HOBBY_ITEMS_INDEX",
-  //     "index_name": "hobby-items-index"
-  //   }
-  // ],
+  "vectorize": [
+    {
+      "binding": "HOBBY_ITEMS_INDEX",
+      "index_name": "hobby-items-index"
+    }
+  ],
   "observability": {
     "enabled": true
   },
