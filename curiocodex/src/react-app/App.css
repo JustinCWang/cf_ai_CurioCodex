@@ -1,45 +1,130 @@
-#root {
-  max-width: 1280px;
+/**
+ * Component styles for the CurioCodex application.
+ * Mystical/magic-themed design with dark gradients, purple accents, and glowing effects.
+ */
+
+/* App Container */
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+  color: #e0e0e0;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  padding: 3rem 2rem 2rem;
+  border-bottom: 1px solid rgba(138, 43, 226, 0.3);
+  background: linear-gradient(180deg, rgba(138, 43, 226, 0.1) 0%, transparent 100%);
+}
+
+.title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(135deg, #8a2be2 0%, #9370db 50%, #ba55d3 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 30px rgba(138, 43, 226, 0.5);
+  letter-spacing: 0.1em;
+}
+
+.subtitle {
+  font-size: 1.2rem;
+  color: #b8b8d4;
+  margin: 0.5rem 0 0;
+  font-style: italic;
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
   padding: 2rem;
+}
+
+.hobby-section h2 {
+  font-size: 2rem;
+  color: #d4af37;
+  margin-bottom: 2rem;
   text-align: center;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-.logo.cloudflare:hover {
-  filter: drop-shadow(0 0 2em #f6821faa);
+/* Hobby Grid - Responsive grid with auto-fill columns (min 280px) */
+.hobby-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 2rem;
+  padding: 1rem 0;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* Hobby Cards - Glassmorphism effect with hover animations */
+.hobby-card {
+  position: relative;
+  background: rgba(26, 26, 46, 0.6);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 12px;
+  padding: 2rem;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  overflow: hidden;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.hobby-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(138, 43, 226, 0.6);
+  box-shadow: 0 8px 25px rgba(138, 43, 226, 0.3);
 }
 
-.card {
-  padding: 2em;
+.card-glow {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(138, 43, 226, 0.1) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
-.read-the-docs {
+.hobby-card:hover .card-glow {
+  opacity: 1;
+}
+
+.hobby-card h3 {
+  font-size: 1.5rem;
+  color: #9370db;
+  margin: 0 0 0.5rem;
+}
+
+.hobby-card p {
+  color: #b8b8d4;
+  margin: 0;
+  font-style: italic;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 2rem;
+  border-top: 1px solid rgba(138, 43, 226, 0.3);
   color: #888;
+  font-size: 0.9rem;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .title {
+    font-size: 2.5rem;
+  }
+  
+  .hobby-grid {
+    grid-template-columns: 1fr;
+  }
 }
