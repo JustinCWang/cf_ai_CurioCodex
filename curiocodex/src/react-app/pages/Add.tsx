@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiRequest, parseResponse } from "../utils/api";
+import { CATEGORIES } from "../utils/categories";
 import "./Add.css";
 
 interface Hobby {
@@ -33,6 +34,8 @@ function Add() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [manualCategory, setManualCategory] = useState<string>("");
   const navigate = useNavigate();
   const { token, isAuthenticated } = useAuth();
 
@@ -82,11 +85,21 @@ function Add() {
     try {
       if (type === "hobby") {
         // Create hobby
+        const requestBody: { name: string; description: string | null; category?: string } = {
+          name: name.trim(),
+          description: description.trim() || null,
+        };
+        
+        // Include category if manually selected
+        if (manualCategory) {
+          requestBody.category = manualCategory;
+        }
+
         const response = await apiRequest(
           "/api/hobbies",
           {
             method: "POST",
-            body: JSON.stringify({ name: name.trim(), description: description.trim() || null }),
+            body: JSON.stringify(requestBody),
           },
           token
         );
@@ -97,6 +110,8 @@ function Add() {
           setSuccess(`Hobby "${data.hobby.name}" created successfully!`);
           setName("");
           setDescription("");
+          setManualCategory("");
+          setShowAdvanced(false);
           // Redirect to hobbies page after 1.5 seconds
           setTimeout(() => {
             navigate("/hobbies");
@@ -104,11 +119,21 @@ function Add() {
         }
       } else {
         // Create item
+        const requestBody: { name: string; description: string | null; category?: string } = {
+          name: name.trim(),
+          description: description.trim() || null,
+        };
+        
+        // Include category if manually selected
+        if (manualCategory) {
+          requestBody.category = manualCategory;
+        }
+
         const response = await apiRequest(
           `/api/hobbies/${selectedHobbyId}/items`,
           {
             method: "POST",
-            body: JSON.stringify({ name: name.trim(), description: description.trim() || null }),
+            body: JSON.stringify(requestBody),
           },
           token
         );
@@ -120,6 +145,8 @@ function Add() {
           setSuccess(`Item "${data.item.name}" added to ${hobbyName} successfully!`);
           setName("");
           setDescription("");
+          setManualCategory("");
+          setShowAdvanced(false);
           // Redirect to items page after 1.5 seconds
           setTimeout(() => {
             navigate("/items");
@@ -236,6 +263,41 @@ function Add() {
               <p className="form-hint">
                 Optional. A detailed description helps AI generate better tags and categorization.
               </p>
+            </div>
+
+            {/* Advanced Options */}
+            <div className="advanced-section">
+              <button
+                type="button"
+                className="advanced-toggle"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+              >
+                {showAdvanced ? "▼" : "▶"} Advanced Options
+              </button>
+              {showAdvanced && (
+                <div className="advanced-content">
+                  <div className="form-group">
+                    <label htmlFor="category">Category</label>
+                    <select
+                      id="category"
+                      value={manualCategory}
+                      onChange={(e) => setManualCategory(e.target.value)}
+                      disabled={loading}
+                      className="form-select"
+                    >
+                      <option value="">Auto-categorize with AI</option>
+                      {CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="form-hint">
+                      Select a category manually to override AI categorization. Leave as "Auto-categorize" to let AI decide.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {error && <div className="error-message">{error}</div>}

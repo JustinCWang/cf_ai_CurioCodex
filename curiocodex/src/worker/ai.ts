@@ -4,6 +4,29 @@
  */
 
 /**
+ * Available categories for hobbies and items.
+ * This list is used for both AI categorization and manual selection.
+ */
+export const CATEGORIES = [
+  "Arts & Crafts",
+  "Digital Media",
+  "Technology",
+  "Sports & Fitness",
+  "Music",
+  "Reading",
+  "Gaming",
+  "Cooking",
+  "Travel",
+  "Photography",
+  "Collectables",
+  "Outdoor Activities",
+  "Learning & Education",
+  "Other",
+] as const;
+
+export type Category = typeof CATEGORIES[number];
+
+/**
  * Generate embedding vector for a hobby/item using Workers AI.
  * Uses BGE (BAAI General Embedding) model optimized for semantic similarity.
  */
@@ -54,24 +77,7 @@ export async function categorizeItem(
   ai: Ai
 ): Promise<string> {
   try {
-    const categories = [
-      "Arts & Crafts",
-      "Digital Media",
-      "Technology",
-      "Sports & Fitness",
-      "Music",
-      "Reading",
-      "Gaming",
-      "Cooking",
-      "Travel",
-      "Photography",
-      "Collecting",
-      "Outdoor Activities",
-      "Learning & Education",
-      "Other",
-    ];
-
-    const prompt = `Categorize this hobby/item into exactly one of these categories: ${categories.join(", ")}.
+    const prompt = `Categorize this hobby/item into exactly one of these categories: ${CATEGORIES.join(", ")}.
 
 Name: ${name}
 Description: ${description || "No description provided"}
@@ -92,7 +98,7 @@ Return ONLY the category name, nothing else:`;
     const category = (response.response || "").trim();
     
     // Validate category is in our list
-    const normalizedCategory = categories.find(
+    const normalizedCategory = CATEGORIES.find(
       (cat) => cat.toLowerCase() === category.toLowerCase()
     );
 

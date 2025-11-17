@@ -252,7 +252,7 @@ app.get("/api/user/profile", async (c) => {
  */
 app.post("/api/hobbies", async (c) => {
   const user = c.get("user");
-  const { name, description } = await c.req.json();
+  const { name, description, category: providedCategory } = await c.req.json();
 
   if (!name) {
     return c.json({ error: "Name is required" }, 400);
@@ -263,8 +263,8 @@ app.post("/api/hobbies", async (c) => {
     const fullText = `${name} ${description || ""}`.trim();
     const embedding = await generateEmbedding(fullText, c.env.AI);
 
-    // 2. Auto-categorize using AI
-    const category = await categorizeItem(name, description || null, c.env.AI);
+    // 2. Use provided category or auto-categorize using AI
+    const category = providedCategory || await categorizeItem(name, description || null, c.env.AI);
 
     // 3. Extract tags using AI
     const tags = await extractTags(name, description || null, c.env.AI);
@@ -431,7 +431,7 @@ app.get("/api/hobbies/:id/similar", async (c) => {
 app.put("/api/hobbies/:id", async (c) => {
   const user = c.get("user");
   const hobbyId = c.req.param("id");
-  const { name, description } = await c.req.json();
+  const { name, description, category: providedCategory } = await c.req.json();
 
   if (!name) {
     return c.json({ error: "Name is required" }, 400);
@@ -453,8 +453,8 @@ app.put("/api/hobbies/:id", async (c) => {
     const fullText = `${name} ${description || ""}`.trim();
     const embedding = await generateEmbedding(fullText, c.env.AI);
 
-    // Re-categorize and extract tags with AI
-    const category = await categorizeItem(name, description || null, c.env.AI);
+    // Use provided category or re-categorize with AI
+    const category = providedCategory || await categorizeItem(name, description || null, c.env.AI);
     const tags = await extractTags(name, description || null, c.env.AI);
 
     // Update hobby in D1 database
@@ -582,7 +582,7 @@ app.delete("/api/hobbies/:id", async (c) => {
 app.post("/api/hobbies/:hobbyId/items", async (c) => {
   const user = c.get("user");
   const hobbyId = c.req.param("hobbyId");
-  const { name, description } = await c.req.json();
+  const { name, description, category: providedCategory } = await c.req.json();
 
   if (!name) {
     return c.json({ error: "Name is required" }, 400);
@@ -604,8 +604,8 @@ app.post("/api/hobbies/:hobbyId/items", async (c) => {
     const fullText = `${name} ${description || ""}`.trim();
     const embedding = await generateEmbedding(fullText, c.env.AI);
 
-    // Auto-categorize
-    const category = await categorizeItem(name, description || null, c.env.AI);
+    // Use provided category or auto-categorize
+    const category = providedCategory || await categorizeItem(name, description || null, c.env.AI);
 
     // Extract tags
     const tags = await extractTags(name, description || null, c.env.AI);
@@ -707,7 +707,7 @@ app.put("/api/hobbies/:hobbyId/items/:id", async (c) => {
   const user = c.get("user");
   const hobbyId = c.req.param("hobbyId");
   const itemId = c.req.param("id");
-  const { name, description } = await c.req.json();
+  const { name, description, category: providedCategory } = await c.req.json();
 
   if (!name) {
     return c.json({ error: "Name is required" }, 400);
@@ -740,8 +740,8 @@ app.put("/api/hobbies/:hobbyId/items/:id", async (c) => {
     const fullText = `${name} ${description || ""}`.trim();
     const embedding = await generateEmbedding(fullText, c.env.AI);
 
-    // Re-categorize and extract tags with AI
-    const category = await categorizeItem(name, description || null, c.env.AI);
+    // Use provided category or re-categorize with AI
+    const category = providedCategory || await categorizeItem(name, description || null, c.env.AI);
     const tags = await extractTags(name, description || null, c.env.AI);
 
     // Update item in D1 database

@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiRequest, parseResponse } from "../utils/api";
+import { CATEGORIES } from "../utils/categories";
 import "./Hobbies.css";
 
 interface Hobby {
@@ -24,6 +25,7 @@ function Hobbies() {
   const [editingHobby, setEditingHobby] = useState<Hobby | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editCategory, setEditCategory] = useState<string>("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const { token, isAuthenticated } = useAuth();
 
@@ -55,12 +57,14 @@ function Hobbies() {
     setEditingHobby(hobby);
     setEditName(hobby.name);
     setEditDescription(hobby.description || "");
+    setEditCategory(hobby.category || "");
   };
 
   const handleCancelEdit = () => {
     setEditingHobby(null);
     setEditName("");
     setEditDescription("");
+    setEditCategory("");
   };
 
   const handleSaveEdit = async () => {
@@ -69,14 +73,21 @@ function Hobbies() {
     }
 
     try {
+      const requestBody: { name: string; description: string | null; category?: string } = {
+        name: editName.trim(),
+        description: editDescription.trim() || null,
+      };
+      
+      // Include category if manually selected (empty string means use AI)
+      if (editCategory) {
+        requestBody.category = editCategory;
+      }
+
       const response = await apiRequest(
         `/api/hobbies/${editingHobby.id}`,
         {
           method: "PUT",
-          body: JSON.stringify({
-            name: editName.trim(),
-            description: editDescription.trim() || null,
-          }),
+          body: JSON.stringify(requestBody),
         },
         token
       );
@@ -228,6 +239,25 @@ function Hobbies() {
                       rows={4}
                       className="form-textarea"
                     />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="edit-category">Category</label>
+                    <select
+                      id="edit-category"
+                      value={editCategory}
+                      onChange={(e) => setEditCategory(e.target.value)}
+                      className="form-input"
+                    >
+                      <option value="">Auto-categorize with AI</option>
+                      {CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="form-hint" style={{ fontSize: "0.85rem", color: "#888", marginTop: "0.5rem" }}>
+                      Select a category manually or leave as "Auto-categorize" to let AI decide.
+                    </p>
                   </div>
                   <div className="modal-actions">
                     <button className="cancel-button" onClick={handleCancelEdit}>

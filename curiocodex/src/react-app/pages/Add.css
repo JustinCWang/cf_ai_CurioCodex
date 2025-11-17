@@ -160,6 +160,36 @@
   transform: none;
 }
 
+.advanced-section {
+  margin-top: 1rem;
+  border-top: 1px solid rgba(138, 43, 226, 0.2);
+  padding-top: 1rem;
+}
+
+.advanced-toggle {
+  background: transparent;
+  border: none;
+  color: #9370db;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: color 0.3s ease;
+}
+
+.advanced-toggle:hover {
+  color: #ba55d3;
+}
+
+.advanced-content {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(138, 43, 226, 0.1);
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .add-form-container {
