@@ -1,0 +1,90 @@
+/**
+ * Navigation component styles - Mystical-themed navigation menu.
+ */
+
+.navigation {
+  background: rgba(26, 26, 46, 0.8);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(138, 43, 226, 0.3);
+  padding: 0;
+}
+
+.nav-list {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.nav-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 1rem 0.5rem;
+  text-decoration: none;
+  color: #b8b8d4;
+  transition: all 0.3s ease;
+  border-bottom: 2px solid transparent;
+  position: relative;
+}
+
+.nav-link:hover {
+  color: #9370db;
+  background: rgba(138, 43, 226, 0.1);
+}
+
+.nav-link.active {
+  color: #9370db;
+  border-bottom-color: #9370db;
+  background: rgba(138, 43, 226, 0.15);
+}
+
+.nav-link.active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #9370db, transparent);
+  opacity: 0.5;
+}
+
+.nav-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.nav-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .nav-list {
+    gap: 0;
+  }
+  
+  .nav-link {
+    padding: 0.75rem 0.25rem;
+  }
+  
+  .nav-icon {
+    font-size: 1.25rem;
+  }
+  
+  .nav-label {
+    font-size: 0.65rem;
+  }
+}
+

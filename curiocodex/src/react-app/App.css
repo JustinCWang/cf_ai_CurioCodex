@@ -48,12 +48,27 @@
   padding: 2rem;
 }
 
-.hobby-section h2 {
-  font-size: 2rem;
+/* Page Styles */
+.page {
+  min-height: 60vh;
+}
+
+.page h1 {
+  font-size: 2.5rem;
   color: #d4af37;
-  margin-bottom: 2rem;
-  text-align: center;
+  margin: 0 0 1.5rem;
   text-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+}
+
+.page-content {
+  color: #e0e0e0;
+  line-height: 1.8;
+}
+
+.page-content p {
+  font-size: 1.1rem;
+  color: #b8b8d4;
+  margin-bottom: 1rem;
 }
 
 /* Hobby Grid - Responsive grid with auto-fill columns (min 280px) */

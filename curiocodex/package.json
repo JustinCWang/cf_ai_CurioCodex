@@ -15,7 +15,8 @@
   "dependencies": {
     "hono": "^4.10.6",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "react-router-dom": "^7.9.6"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.7.5",
