@@ -56,6 +56,7 @@ export async function categorizeItem(
   try {
     const categories = [
       "Arts & Crafts",
+      "Digital Media",
       "Technology",
       "Sports & Fitness",
       "Music",
