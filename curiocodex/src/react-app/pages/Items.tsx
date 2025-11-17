@@ -32,6 +32,10 @@ function Items() {
   const [itemsByHobby, setItemsByHobby] = useState<ItemsByHobby[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [editingItem, setEditingItem] = useState<{ item: Item; hobbyId: string } | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<{ itemId: string; hobbyId: string } | null>(null);
   const { token, isAuthenticated } = useAuth();
 
   const fetchAllItems = useCallback(async () => {
@@ -91,6 +95,62 @@ function Items() {
       setLoading(false);
     }
   }, [isAuthenticated, fetchAllItems]);
+
+  const handleEdit = (item: Item, hobbyId: string) => {
+    setEditingItem({ item, hobbyId });
+    setEditName(item.name);
+    setEditDescription(item.description || "");
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItem(null);
+    setEditName("");
+    setEditDescription("");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingItem || !editName.trim()) {
+      return;
+    }
+
+    try {
+      const response = await apiRequest(
+        `/api/hobbies/${editingItem.hobbyId}/items/${editingItem.item.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            name: editName.trim(),
+            description: editDescription.trim() || null,
+          }),
+        },
+        token
+      );
+      await parseResponse(response);
+      await fetchAllItems();
+      handleCancelEdit();
+    } catch (err) {
+      console.error("Error updating item:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to update item";
+      setError(errorMessage);
+    }
+  };
+
+  const handleDelete = async (itemId: string, hobbyId: string) => {
+    try {
+      const response = await apiRequest(
+        `/api/hobbies/${hobbyId}/items/${itemId}`,
+        { method: "DELETE" },
+        token
+      );
+      await parseResponse(response);
+      await fetchAllItems();
+      setDeleteConfirm(null);
+    } catch (err) {
+      console.error("Error deleting item:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to delete item";
+      setError(errorMessage);
+    }
+  };
 
   const totalItems = itemsByHobby.reduce((sum, group) => sum + group.items.length, 0);
 
@@ -172,11 +232,89 @@ function Items() {
                           ))}
                         </div>
                       )}
+                      <div className="card-footer">
+                        <div className="action-buttons">
+                          <button
+                            className="edit-button"
+                            onClick={() => handleEdit(item, group.hobby.id)}
+                            title="Edit item"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            className="delete-button"
+                            onClick={() => setDeleteConfirm({ itemId: item.id, hobbyId: group.hobby.id })}
+                            title="Delete item"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Edit Modal */}
+        {editingItem && (
+          <div className="modal-overlay" onClick={handleCancelEdit}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <h2>Edit Item</h2>
+              <div className="form-group">
+                <label htmlFor="edit-item-name">Name *</label>
+                <input
+                  id="edit-item-name"
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Item name"
+                  className="form-input"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-item-description">Description</label>
+                <textarea
+                  id="edit-item-description"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Describe your item..."
+                  rows={4}
+                  className="form-textarea"
+                />
+              </div>
+              <div className="modal-actions">
+                <button className="cancel-button" onClick={handleCancelEdit}>
+                  Cancel
+                </button>
+                <button className="save-button" onClick={handleSaveEdit}>
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirm && (
+          <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+            <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
+              <h2>Delete Item?</h2>
+              <p>Are you sure you want to delete this item? This action cannot be undone.</p>
+              <div className="modal-actions">
+                <button className="cancel-button" onClick={() => setDeleteConfirm(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="delete-confirm-button"
+                  onClick={() => handleDelete(deleteConfirm.itemId, deleteConfirm.hobbyId)}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

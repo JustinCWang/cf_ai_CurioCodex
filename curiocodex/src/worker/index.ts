@@ -424,6 +424,153 @@ app.get("/api/hobbies/:id/similar", async (c) => {
   }
 });
 
+/**
+ * PUT /api/hobbies/:id
+ * Update an existing hobby.
+ */
+app.put("/api/hobbies/:id", async (c) => {
+  const user = c.get("user");
+  const hobbyId = c.req.param("id");
+  const { name, description } = await c.req.json();
+
+  if (!name) {
+    return c.json({ error: "Name is required" }, 400);
+  }
+
+  try {
+    // Verify hobby belongs to user
+    const hobby = await c.env.DB.prepare(
+      "SELECT id, user_id FROM hobbies WHERE id = ?"
+    )
+      .bind(hobbyId)
+      .first<{ id: string; user_id: string }>();
+
+    if (!hobby || hobby.user_id !== user.userId) {
+      return c.json({ error: "Hobby not found" }, 404);
+    }
+
+    // Generate new embedding from updated name and description
+    const fullText = `${name} ${description || ""}`.trim();
+    const embedding = await generateEmbedding(fullText, c.env.AI);
+
+    // Re-categorize and extract tags with AI
+    const category = await categorizeItem(name, description || null, c.env.AI);
+    const tags = await extractTags(name, description || null, c.env.AI);
+
+    // Update hobby in D1 database
+    await c.env.DB.prepare(
+      `UPDATE hobbies 
+       SET name = ?, description = ?, category = ?, tags = ? 
+       WHERE id = ? AND user_id = ?`
+    )
+      .bind(
+        name,
+        description || null,
+        category,
+        JSON.stringify(tags),
+        hobbyId,
+        user.userId
+      )
+      .run();
+
+    // Update embedding in Vectorize (optional in local dev)
+    if (c.env.HOBBY_ITEMS_INDEX) {
+      try {
+        await c.env.HOBBY_ITEMS_INDEX.insert([
+          {
+            id: hobbyId,
+            values: embedding,
+            metadata: {
+              type: "hobby",
+              userId: user.userId,
+              name: name,
+              category: category,
+            },
+          },
+        ]);
+      } catch (error) {
+        console.warn("Vectorize not available (local dev?):", error);
+      }
+    }
+
+    return c.json({
+      success: true,
+      hobby: {
+        id: hobbyId,
+        name,
+        description,
+        category,
+        tags,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating hobby:", error);
+    return c.json({ error: "Failed to update hobby" }, 500);
+  }
+});
+
+/**
+ * DELETE /api/hobbies/:id
+ * Delete a hobby and all its associated items.
+ */
+app.delete("/api/hobbies/:id", async (c) => {
+  const user = c.get("user");
+  const hobbyId = c.req.param("id");
+
+  try {
+    // Verify hobby belongs to user
+    const hobby = await c.env.DB.prepare(
+      "SELECT id, user_id FROM hobbies WHERE id = ?"
+    )
+      .bind(hobbyId)
+      .first<{ id: string; user_id: string }>();
+
+    if (!hobby || hobby.user_id !== user.userId) {
+      return c.json({ error: "Hobby not found" }, 404);
+    }
+
+    // Get item IDs before deleting (for Vectorize cleanup)
+    const items = await c.env.DB.prepare(
+      "SELECT id FROM items WHERE hobby_id = ?"
+    )
+      .bind(hobbyId)
+      .all<{ id: string }>();
+
+    const itemIds = items.results.map((item) => item.id);
+
+    // Delete items first (due to foreign key constraint)
+    await c.env.DB.prepare(
+      "DELETE FROM items WHERE hobby_id = ?"
+    )
+      .bind(hobbyId)
+      .run();
+
+    // Delete hobby
+    await c.env.DB.prepare(
+      "DELETE FROM hobbies WHERE id = ? AND user_id = ?"
+    )
+      .bind(hobbyId, user.userId)
+      .run();
+
+    // Delete from Vectorize (optional in local dev)
+    if (c.env.HOBBY_ITEMS_INDEX) {
+      try {
+        const idsToDelete = [hobbyId, ...itemIds];
+        if (idsToDelete.length > 0) {
+          await c.env.HOBBY_ITEMS_INDEX.deleteByIds(idsToDelete);
+        }
+      } catch (error) {
+        console.warn("Vectorize not available (local dev?):", error);
+      }
+    }
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting hobby:", error);
+    return c.json({ error: "Failed to delete hobby" }, 500);
+  }
+});
+
 // ============================================================================
 // Items API Routes
 // ============================================================================
@@ -550,6 +697,159 @@ app.get("/api/hobbies/:hobbyId/items", async (c) => {
   }));
 
   return c.json({ items: itemsWithParsedTags });
+});
+
+/**
+ * PUT /api/hobbies/:hobbyId/items/:id
+ * Update an existing item.
+ */
+app.put("/api/hobbies/:hobbyId/items/:id", async (c) => {
+  const user = c.get("user");
+  const hobbyId = c.req.param("hobbyId");
+  const itemId = c.req.param("id");
+  const { name, description } = await c.req.json();
+
+  if (!name) {
+    return c.json({ error: "Name is required" }, 400);
+  }
+
+  try {
+    // Verify hobby belongs to user
+    const hobby = await c.env.DB.prepare(
+      "SELECT id, user_id FROM hobbies WHERE id = ?"
+    )
+      .bind(hobbyId)
+      .first<{ id: string; user_id: string }>();
+
+    if (!hobby || hobby.user_id !== user.userId) {
+      return c.json({ error: "Hobby not found" }, 404);
+    }
+
+    // Verify item belongs to hobby
+    const item = await c.env.DB.prepare(
+      "SELECT id, hobby_id FROM items WHERE id = ?"
+    )
+      .bind(itemId)
+      .first<{ id: string; hobby_id: string }>();
+
+    if (!item || item.hobby_id !== hobbyId) {
+      return c.json({ error: "Item not found" }, 404);
+    }
+
+    // Generate new embedding from updated name and description
+    const fullText = `${name} ${description || ""}`.trim();
+    const embedding = await generateEmbedding(fullText, c.env.AI);
+
+    // Re-categorize and extract tags with AI
+    const category = await categorizeItem(name, description || null, c.env.AI);
+    const tags = await extractTags(name, description || null, c.env.AI);
+
+    // Update item in D1 database
+    await c.env.DB.prepare(
+      `UPDATE items 
+       SET name = ?, description = ?, category = ?, tags = ? 
+       WHERE id = ? AND hobby_id = ?`
+    )
+      .bind(
+        name,
+        description || null,
+        category,
+        JSON.stringify(tags),
+        itemId,
+        hobbyId
+      )
+      .run();
+
+    // Update embedding in Vectorize (optional in local dev)
+    if (c.env.HOBBY_ITEMS_INDEX) {
+      try {
+        await c.env.HOBBY_ITEMS_INDEX.insert([
+          {
+            id: itemId,
+            values: embedding,
+            metadata: {
+              type: "item",
+              userId: user.userId,
+              hobbyId: hobbyId,
+              name: name,
+              category: category,
+            },
+          },
+        ]);
+      } catch (error) {
+        console.warn("Vectorize not available (local dev?):", error);
+      }
+    }
+
+    return c.json({
+      success: true,
+      item: {
+        id: itemId,
+        name,
+        description,
+        category,
+        tags,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating item:", error);
+    return c.json({ error: "Failed to update item" }, 500);
+  }
+});
+
+/**
+ * DELETE /api/hobbies/:hobbyId/items/:id
+ * Delete an item.
+ */
+app.delete("/api/hobbies/:hobbyId/items/:id", async (c) => {
+  const user = c.get("user");
+  const hobbyId = c.req.param("hobbyId");
+  const itemId = c.req.param("id");
+
+  try {
+    // Verify hobby belongs to user
+    const hobby = await c.env.DB.prepare(
+      "SELECT id, user_id FROM hobbies WHERE id = ?"
+    )
+      .bind(hobbyId)
+      .first<{ id: string; user_id: string }>();
+
+    if (!hobby || hobby.user_id !== user.userId) {
+      return c.json({ error: "Hobby not found" }, 404);
+    }
+
+    // Verify item belongs to hobby
+    const item = await c.env.DB.prepare(
+      "SELECT id, hobby_id FROM items WHERE id = ?"
+    )
+      .bind(itemId)
+      .first<{ id: string; hobby_id: string }>();
+
+    if (!item || item.hobby_id !== hobbyId) {
+      return c.json({ error: "Item not found" }, 404);
+    }
+
+    // Delete item
+    await c.env.DB.prepare(
+      "DELETE FROM items WHERE id = ? AND hobby_id = ?"
+    )
+      .bind(itemId, hobbyId)
+      .run();
+
+    // Delete from Vectorize (optional in local dev)
+    if (c.env.HOBBY_ITEMS_INDEX) {
+      try {
+        await c.env.HOBBY_ITEMS_INDEX.deleteByIds([itemId]);
+      } catch (error) {
+        console.warn("Vectorize not available (local dev?):", error);
+      }
+    }
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Error deleting item:", error);
+    return c.json({ error: "Failed to delete item" }, 500);
+  }
 });
 
 // ============================================================================

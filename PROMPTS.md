@@ -7,3 +7,6 @@ Can you explain to me how wrangler works and what DB options Cloudflare offers i
 Ok now that we have basic auth and a database set up, I need to set up the backend so I can add hobbies and items and have it autocategorize my stuff and find relations between my hobbies/items for recommendations. I'm thinking that we definitely need a way to vectorize all the items and probably need a model for this part. Does cloudflare offer us anyway to do this?
 
 Cloudflare's Vectorize and Vite seem to be in conflict and causing my local development to not function with the VECTORIZE binding. What are some possible reasons this might be the case and are there any work arounds?
+
+We need to implement the rest of the CRUD operations to allow for editing and deleting of hobbies and items, can you help me figure out what methods frmo the Cloudflare documentation we would need to implement these and create a simple frontend UI for these features?
+
