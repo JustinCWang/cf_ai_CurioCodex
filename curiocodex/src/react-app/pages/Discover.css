@@ -1,0 +1,359 @@
+/**
+ * Discover page styles - Semantic search interface.
+ */
+
+.discover-header {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.discover-header p {
+  color: #b8b8d4;
+  margin: 0.5rem 0;
+}
+
+.discover-hint {
+  font-size: 0.9rem;
+  color: #888;
+  font-style: italic;
+}
+
+.search-form {
+  margin-bottom: 2rem;
+}
+
+.search-input-container {
+  display: flex;
+  gap: 1rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.search-input {
+  flex: 1;
+  background: rgba(26, 26, 46, 0.6);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  color: #e0e0e0;
+  font-size: 1.1rem;
+  font-family: inherit;
+  transition: all 0.3s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: rgba(138, 43, 226, 0.6);
+  box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.1);
+}
+
+.search-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.search-input::placeholder {
+  color: #888;
+}
+
+.search-button {
+  background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
+  border: none;
+  border-radius: 12px;
+  padding: 1rem 2rem;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.search-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(138, 43, 226, 0.4);
+}
+
+.search-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.error-message {
+  background: rgba(220, 53, 69, 0.2);
+  border: 1px solid rgba(220, 53, 69, 0.5);
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: #ff6b6b;
+  text-align: center;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: rgba(26, 26, 46, 0.4);
+  border: 1px dashed rgba(138, 43, 226, 0.3);
+  border-radius: 12px;
+}
+
+.empty-message {
+  font-size: 1.5rem;
+  color: #9370db;
+  margin: 0 0 0.5rem;
+}
+
+.empty-hint {
+  color: #b8b8d4;
+  margin: 0;
+}
+
+.search-results {
+  margin-top: 2rem;
+}
+
+.results-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(138, 43, 226, 0.2);
+}
+
+.results-header h2 {
+  margin: 0;
+  color: #9370db;
+  font-size: 1.75rem;
+}
+
+.results-count {
+  color: #b8b8d4;
+  font-size: 0.95rem;
+}
+
+.results-section {
+  margin-bottom: 3rem;
+}
+
+.section-title {
+  color: #d4af37;
+  font-size: 1.5rem;
+  margin: 0 0 1.5rem;
+}
+
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.result-card {
+  position: relative;
+  background: rgba(26, 26, 46, 0.6);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.result-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(138, 43, 226, 0.6);
+  box-shadow: 0 8px 25px rgba(138, 43, 226, 0.3);
+}
+
+.result-card .card-glow {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(138, 43, 226, 0.1) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.result-card:hover .card-glow {
+  opacity: 1;
+}
+
+.similarity-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.8) 0%, rgba(147, 112, 219, 0.8) 100%);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  z-index: 1;
+}
+
+.result-card h4 {
+  font-size: 1.25rem;
+  color: #9370db;
+  margin: 0 0 0.75rem;
+  position: relative;
+  z-index: 1;
+}
+
+.card-description {
+  color: #b8b8d4;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  position: relative;
+  z-index: 1;
+}
+
+.card-category {
+  margin: 1rem 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  z-index: 1;
+}
+
+.category-label {
+  color: #888;
+  font-size: 0.85rem;
+}
+
+.category-value {
+  color: #d4af37;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  position: relative;
+  z-index: 1;
+}
+
+.tag {
+  background: rgba(138, 43, 226, 0.2);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 12px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  color: #ba55d3;
+}
+
+.card-footer {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(138, 43, 226, 0.2);
+  position: relative;
+  z-index: 1;
+}
+
+.view-link {
+  color: #9370db;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: color 0.3s ease;
+}
+
+.view-link:hover {
+  color: #ba55d3;
+  text-decoration: underline;
+}
+
+.discover-intro {
+  margin-top: 3rem;
+}
+
+.intro-card {
+  background: rgba(26, 26, 46, 0.6);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.intro-card h2 {
+  color: #9370db;
+  margin: 0 0 1rem;
+  font-size: 1.75rem;
+}
+
+.intro-card p {
+  color: #b8b8d4;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.example-searches {
+  text-align: left;
+  background: rgba(10, 10, 15, 0.4);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.example-searches h3 {
+  color: #d4af37;
+  font-size: 1rem;
+  margin: 0 0 1rem;
+}
+
+.example-searches ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.example-searches li {
+  color: #b8b8d4;
+  padding: 0.5rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+}
+
+.example-searches li::before {
+  content: "💡";
+  position: absolute;
+  left: 0;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .search-input-container {
+    flex-direction: column;
+  }
+
+  .search-button {
+    width: 100%;
+  }
+
+  .results-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .intro-card {
+    padding: 1.5rem;
+  }
+}
+

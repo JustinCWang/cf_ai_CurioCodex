@@ -1044,6 +1044,189 @@ app.get("/api/discover/by-category/:category", async (c) => {
   return c.json({ hobbies: hobbiesWithParsedTags });
 });
 
+/**
+ * POST /api/discover/search
+ * Semantic search across user's hobbies and items using Vectorize.
+ */
+app.post("/api/discover/search", async (c) => {
+  const user = c.get("user");
+  const { query, limit = 20 } = await c.req.json();
+
+  if (!query || !query.trim()) {
+    return c.json({ error: "Search query is required" }, 400);
+  }
+
+  try {
+    // Try to get search results using Vectorize (may not be available in local dev)
+    if (!c.env.HOBBY_ITEMS_INDEX) {
+      // Fallback to simple text search in database
+      const searchTerm = `%${query}%`;
+      const hobbies = await c.env.DB.prepare(
+        `SELECT id, name, description, category, tags, created_at 
+         FROM hobbies 
+         WHERE user_id = ? AND (name LIKE ? OR description LIKE ?)
+         ORDER BY created_at DESC LIMIT ?`
+      )
+        .bind(user.userId, searchTerm, searchTerm, limit)
+        .all<HobbyRow>();
+
+      const items = await c.env.DB.prepare(
+        `SELECT i.id, i.name, i.description, i.category, i.tags, i.created_at, i.hobby_id
+         FROM items i
+         INNER JOIN hobbies h ON i.hobby_id = h.id
+         WHERE h.user_id = ? AND (i.name LIKE ? OR i.description LIKE ?)
+         ORDER BY i.created_at DESC LIMIT ?`
+      )
+        .bind(user.userId, searchTerm, searchTerm, limit)
+        .all<ItemRow & { hobby_id: string }>();
+
+      return c.json({
+        hobbies: hobbies.results.map((h) => ({
+          ...h,
+          tags: h.tags ? JSON.parse(h.tags) as string[] : [],
+          type: "hobby" as const,
+        })),
+        items: items.results.map((i) => ({
+          ...i,
+          tags: i.tags ? JSON.parse(i.tags) as string[] : [],
+          type: "item" as const,
+        })),
+      });
+    }
+
+    try {
+      // Generate embedding from search query
+      const queryEmbedding = await generateEmbedding(query.trim(), c.env.AI);
+
+      // Search Vectorize for similar items
+      const matches = await c.env.HOBBY_ITEMS_INDEX.query(queryEmbedding, {
+        topK: limit * 2, // Get more to filter by user
+      });
+
+      // Filter to only user's items/hobbies
+      const userMatches = matches.matches.filter((m) => {
+        const metadata = m.metadata as { userId?: string };
+        return metadata.userId === user.userId;
+      }).slice(0, limit);
+
+      if (userMatches.length === 0) {
+        return c.json({ hobbies: [], items: [] });
+      }
+
+      // Separate hobbies and items by type
+      const hobbyIds: string[] = [];
+      const itemIds: string[] = [];
+
+      userMatches.forEach((match) => {
+        const metadata = match.metadata as { type?: string };
+        if (metadata.type === "hobby") {
+          hobbyIds.push(match.id);
+        } else if (metadata.type === "item") {
+          itemIds.push(match.id);
+        }
+      });
+
+      // Fetch hobbies from D1
+      const hobbies: HobbyRow[] = [];
+      if (hobbyIds.length > 0) {
+        const placeholders = hobbyIds.map(() => "?").join(",");
+        const hobbyResults = await c.env.DB.prepare(
+          `SELECT id, name, description, category, tags, created_at 
+           FROM hobbies 
+           WHERE id IN (${placeholders}) AND user_id = ?`
+        )
+          .bind(...hobbyIds, user.userId)
+          .all<HobbyRow>();
+        hobbies.push(...hobbyResults.results);
+      }
+
+      // Fetch items from D1
+      const items: (ItemRow & { hobby_id: string })[] = [];
+      if (itemIds.length > 0) {
+        const placeholders = itemIds.map(() => "?").join(",");
+        const itemResults = await c.env.DB.prepare(
+          `SELECT i.id, i.name, i.description, i.category, i.tags, i.created_at, i.hobby_id
+           FROM items i
+           INNER JOIN hobbies h ON i.hobby_id = h.id
+           WHERE i.id IN (${placeholders}) AND h.user_id = ?`
+        )
+          .bind(...itemIds, user.userId)
+          .all<ItemRow & { hobby_id: string }>();
+        items.push(...itemResults.results);
+      }
+
+      // Create a map of IDs to similarity scores
+      const similarityMap = new Map<string, number>();
+      userMatches.forEach((match) => {
+        similarityMap.set(match.id, match.score);
+      });
+
+      // Sort by similarity score and add to results
+      const hobbiesWithScores = hobbies
+        .map((hobby) => ({
+          ...hobby,
+          tags: hobby.tags ? JSON.parse(hobby.tags) as string[] : [],
+          type: "hobby" as const,
+          similarity: similarityMap.get(hobby.id) || 0,
+        }))
+        .sort((a, b) => b.similarity - a.similarity);
+
+      const itemsWithScores = items
+        .map((item) => ({
+          ...item,
+          tags: item.tags ? JSON.parse(item.tags) as string[] : [],
+          type: "item" as const,
+          similarity: similarityMap.get(item.id) || 0,
+        }))
+        .sort((a, b) => b.similarity - a.similarity);
+
+      return c.json({
+        hobbies: hobbiesWithScores,
+        items: itemsWithScores,
+      });
+    } catch (vectorizeError) {
+      // Vectorize not available in local dev - fallback to text search
+      console.warn("Vectorize search failed, falling back to text search:", vectorizeError);
+      
+      const searchTerm = `%${query}%`;
+      const hobbies = await c.env.DB.prepare(
+        `SELECT id, name, description, category, tags, created_at 
+         FROM hobbies 
+         WHERE user_id = ? AND (name LIKE ? OR description LIKE ?)
+         ORDER BY created_at DESC LIMIT ?`
+      )
+        .bind(user.userId, searchTerm, searchTerm, limit)
+        .all<HobbyRow>();
+
+      const items = await c.env.DB.prepare(
+        `SELECT i.id, i.name, i.description, i.category, i.tags, i.created_at, i.hobby_id
+         FROM items i
+         INNER JOIN hobbies h ON i.hobby_id = h.id
+         WHERE h.user_id = ? AND (i.name LIKE ? OR i.description LIKE ?)
+         ORDER BY i.created_at DESC LIMIT ?`
+      )
+        .bind(user.userId, searchTerm, searchTerm, limit)
+        .all<ItemRow & { hobby_id: string }>();
+
+      return c.json({
+        hobbies: hobbies.results.map((h) => ({
+          ...h,
+          tags: h.tags ? JSON.parse(h.tags) as string[] : [],
+          type: "hobby" as const,
+        })),
+        items: items.results.map((i) => ({
+          ...i,
+          tags: i.tags ? JSON.parse(i.tags) as string[] : [],
+          type: "item" as const,
+        })),
+      });
+    }
+  } catch (error) {
+    console.error("Error performing semantic search:", error);
+    return c.json({ error: "Failed to perform search" }, 500);
+  }
+});
+
 // ============================================================================
 // Image Serving Routes
 // ============================================================================
