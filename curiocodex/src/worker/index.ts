@@ -641,11 +641,20 @@ app.post("/api/hobbies/:hobbyId/items", async (c) => {
         !providedCategory
       ) {
         try {
+          // Fetch hobby context (name/category) to give the AI better hints
+          const hobbyForContext = await c.env.DB.prepare(
+            "SELECT name, category FROM hobbies WHERE id = ? AND user_id = ?"
+          )
+            .bind(hobbyId, user.userId)
+            .first<{ name: string; category: string | null } | null>();
+
           const imageArrayBuffer = await imageFile.arrayBuffer();
           const analysis = await analyzeImage(imageArrayBuffer, c.env.AI, {
             name: name,
             description: description,
             category: providedCategory,
+            hobbyName: hobbyForContext?.name,
+            hobbyCategory: hobbyForContext?.category,
           });
           
           // Only use AI suggestions if user hasn't provided values
@@ -899,6 +908,117 @@ app.put("/api/hobbies/:hobbyId/items/:id", async (c) => {
   } catch (error) {
     console.error("Error updating item:", error);
     return c.json({ error: "Failed to update item" }, 500);
+  }
+});
+
+/**
+ * PUT /api/hobbies/:hobbyId/items/:id/move
+ * Move an item from one hobby to another.
+ */
+app.put("/api/hobbies/:hobbyId/items/:id/move", async (c) => {
+  const user = c.get("user");
+  const oldHobbyId = c.req.param("hobbyId");
+  const itemId = c.req.param("id");
+  const { newHobbyId } = await c.req.json<{ newHobbyId?: string }>();
+
+  if (!newHobbyId || !newHobbyId.trim()) {
+    return c.json({ error: "newHobbyId is required" }, 400);
+  }
+
+  if (newHobbyId === oldHobbyId) {
+    return c.json({ error: "Item is already in this hobby" }, 400);
+  }
+
+  try {
+    // Verify old hobby belongs to user
+    const oldHobby = await c.env.DB.prepare(
+      "SELECT id, user_id FROM hobbies WHERE id = ?"
+    )
+      .bind(oldHobbyId)
+      .first<{ id: string; user_id: string }>();
+
+    if (!oldHobby || oldHobby.user_id !== user.userId) {
+      return c.json({ error: "Source hobby not found" }, 404);
+    }
+
+    // Verify new hobby belongs to same user
+    const newHobby = await c.env.DB.prepare(
+      "SELECT id, user_id FROM hobbies WHERE id = ?"
+    )
+      .bind(newHobbyId)
+      .first<{ id: string; user_id: string }>();
+
+    if (!newHobby || newHobby.user_id !== user.userId) {
+      return c.json({ error: "Target hobby not found" }, 404);
+    }
+
+    // Verify item belongs to old hobby
+    const item = await c.env.DB.prepare(
+      "SELECT id, hobby_id, name, description, category, tags FROM items WHERE id = ?"
+    )
+      .bind(itemId)
+      .first<{
+        id: string;
+        hobby_id: string;
+        name: string;
+        description: string | null;
+        category: string | null;
+        tags: string | null;
+      }>();
+
+    if (!item || item.hobby_id !== oldHobbyId) {
+      return c.json({ error: "Item not found in source hobby" }, 404);
+    }
+
+    // Generate new embedding (optional but keeps things consistent)
+    const fullText = `${item.name} ${item.description || ""}`.trim();
+    const embedding = await generateEmbedding(fullText, c.env.AI);
+
+    // Move item to new hobby in D1
+    await c.env.DB.prepare(
+      `UPDATE items 
+       SET hobby_id = ? 
+       WHERE id = ? AND hobby_id = ?`
+    )
+      .bind(newHobbyId, itemId, oldHobbyId)
+      .run();
+
+    // Update embedding metadata in Vectorize (optional in local dev)
+    if (c.env.HOBBY_ITEMS_INDEX) {
+      try {
+        await c.env.HOBBY_ITEMS_INDEX.upsert([
+          {
+            id: itemId,
+            values: embedding,
+            metadata: {
+              type: "item",
+              userId: user.userId,
+              hobbyId: newHobbyId,
+              name: item.name,
+              category: item.category || "Other",
+            },
+          },
+        ]);
+      } catch (error) {
+        console.warn("Vectorize not available (local dev?):", error);
+      }
+    }
+
+    return c.json({
+      success: true,
+      item: {
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        category: item.category,
+        tags: item.tags ? JSON.parse(item.tags) as string[] : [],
+        oldHobbyId,
+        newHobbyId,
+      },
+    });
+  } catch (error) {
+    console.error("Error moving item between hobbies:", error);
+    return c.json({ error: "Failed to move item" }, 500);
   }
 });
 

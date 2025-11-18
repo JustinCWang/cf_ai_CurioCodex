@@ -227,6 +227,8 @@ interface ImageAnalysisContext {
   name?: string | null;
   description?: string | null;
   category?: string | null;
+  hobbyName?: string | null;
+  hobbyCategory?: string | null;
 }
 
 export async function analyzeImage(
@@ -266,6 +268,12 @@ export async function analyzeImage(
         }
         if (context.category && context.category.trim()) {
           contextLines.push(`Item category (from user): ${context.category.trim()}`);
+        }
+        if (context.hobbyName && context.hobbyName.trim()) {
+          contextLines.push(`Hobby name (collection this item belongs to): ${context.hobbyName.trim()}`);
+        }
+        if (context.hobbyCategory && context.hobbyCategory.trim()) {
+          contextLines.push(`Hobby category: ${context.hobbyCategory.trim()}`);
         }
 
         if (contextLines.length > 0) {
@@ -314,12 +322,14 @@ export async function analyzeImage(
     // Step 2: Use text model to extract structured data from the description
     // Include any user-provided context again so the model can refine rather than contradict it.
     const userContextForExtraction =
-      context && (context.name || context.description || context.category)
+      context && (context.name || context.description || context.category || context.hobbyName || context.hobbyCategory)
         ? `
 User-provided context (may be partial or approximate):
 - Name: ${context.name || "N/A"}
 - Description: ${context.description || "N/A"}
 - Category: ${context.category || "N/A"}
+- Hobby name: ${context.hobbyName || "N/A"}
+- Hobby category: ${context.hobbyCategory || "N/A"}
 
 Use this context as a hint, but prefer what you actually see in the image if there is a conflict.
 `
