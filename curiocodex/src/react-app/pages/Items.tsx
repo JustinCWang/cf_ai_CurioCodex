@@ -32,12 +32,14 @@ interface ItemsByHobby {
 
 function Items() {
   const [itemsByHobby, setItemsByHobby] = useState<ItemsByHobby[]>([]);
+  const [hobbies, setHobbies] = useState<Hobby[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editingItem, setEditingItem] = useState<{ item: Item; hobbyId: string } | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editCategory, setEditCategory] = useState<string>("");
+  const [editHobbyId, setEditHobbyId] = useState<string>("");
   const [deleteConfirm, setDeleteConfirm] = useState<{ itemId: string; hobbyId: string } | null>(null);
   const { token, isAuthenticated } = useAuth();
 
@@ -48,7 +50,9 @@ function Items() {
       // First, fetch all hobbies
       const hobbiesResponse = await apiRequest("/api/hobbies", { method: "GET" }, token);
       const hobbiesData = await parseResponse<{ hobbies: Hobby[] }>(hobbiesResponse);
-      
+
+      setHobbies(hobbiesData.hobbies);
+
       if (hobbiesData.hobbies.length === 0) {
         setItemsByHobby([]);
         setLoading(false);
@@ -104,6 +108,7 @@ function Items() {
     setEditName(item.name);
     setEditDescription(item.description || "");
     setEditCategory(item.category || "");
+    setEditHobbyId(hobbyId);
   };
 
   const handleCancelEdit = () => {
@@ -111,6 +116,7 @@ function Items() {
     setEditName("");
     setEditDescription("");
     setEditCategory("");
+    setEditHobbyId("");
   };
 
   const handleSaveEdit = async () => {
@@ -119,6 +125,9 @@ function Items() {
     }
 
     try {
+      const originalHobbyId = editingItem.hobbyId;
+      const targetHobbyId = editHobbyId || originalHobbyId;
+
       const requestBody: { name: string; description: string | null; category?: string } = {
         name: editName.trim(),
         description: editDescription.trim() || null,
@@ -129,8 +138,9 @@ function Items() {
         requestBody.category = editCategory;
       }
 
+      // First, update the item fields under its current hobby
       const response = await apiRequest(
-        `/api/hobbies/${editingItem.hobbyId}/items/${editingItem.item.id}`,
+        `/api/hobbies/${originalHobbyId}/items/${editingItem.item.id}`,
         {
           method: "PUT",
           body: JSON.stringify(requestBody),
@@ -138,6 +148,19 @@ function Items() {
         token
       );
       await parseResponse(response);
+
+      // If the hobby changed, move the item to the new hobby
+      if (targetHobbyId !== originalHobbyId) {
+        const moveResponse = await apiRequest(
+          `/api/hobbies/${originalHobbyId}/items/${editingItem.item.id}/move`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ newHobbyId: targetHobbyId }),
+          },
+          token
+        );
+        await parseResponse(moveResponse);
+      }
       await fetchAllItems();
       handleCancelEdit();
     } catch (err) {
@@ -309,6 +332,24 @@ function Items() {
                   rows={4}
                   className="form-textarea"
                 />
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-item-hobby">Hobby</label>
+                <select
+                  id="edit-item-hobby"
+                  value={editHobbyId}
+                  onChange={(e) => setEditHobbyId(e.target.value)}
+                  className="form-input"
+                >
+                  {hobbies.map((hobby) => (
+                    <option key={hobby.id} value={hobby.id}>
+                      {hobby.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="form-hint" style={{ fontSize: "0.85rem", color: "#888", marginTop: "0.5rem" }}>
+                  Move this item to a different hobby, or keep it in the current one.
+                </p>
               </div>
               <div className="form-group">
                 <label htmlFor="edit-item-category">Category</label>

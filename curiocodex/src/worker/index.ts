@@ -256,13 +256,29 @@ app.get("/api/user/profile", async (c) => {
  */
 app.post("/api/hobbies", async (c) => {
   const user = c.get("user");
-  const { name, description, category: providedCategory } = await c.req.json();
+  const body = await c.req.json();
+  const name = body.name as string | undefined;
+  let description = body.description as string | undefined;
+  const providedCategory = body.category as string | undefined;
 
   if (!name) {
     return c.json({ error: "Name is required" }, 400);
   }
 
   try {
+    // 0. If description is missing, generate a brief one from the hobby name
+    if (!description || !description.trim()) {
+      try {
+        const generatedDescription = await generateDescriptionFromName(name, c.env.AI);
+        if (generatedDescription && generatedDescription.trim()) {
+          description = generatedDescription;
+        }
+      } catch (descError) {
+        console.error("Error generating hobby description from name:", descError);
+        // Safe to continue without a description
+      }
+    }
+
     // 1. Generate embedding from name and description
     const fullText = `${name} ${description || ""}`.trim();
     const embedding = await generateEmbedding(fullText, c.env.AI);
