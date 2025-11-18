@@ -190,6 +190,143 @@
   border-top: 1px solid rgba(138, 43, 226, 0.1);
 }
 
+.image-preview-container {
+  margin-top: 1rem;
+  position: relative;
+  display: inline-block;
+}
+
+.image-preview {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  object-fit: contain;
+}
+
+.remove-image-button {
+  margin-top: 0.5rem;
+  background: rgba(220, 53, 69, 0.2);
+  border: 1px solid rgba(220, 53, 69, 0.5);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  color: #ff6b6b;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.remove-image-button:hover:not(:disabled) {
+  background: rgba(220, 53, 69, 0.3);
+  border-color: rgba(220, 53, 69, 0.7);
+}
+
+.remove-image-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.image-input-container {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.camera-button {
+  background: rgba(138, 43, 226, 0.3);
+  border: 1px solid rgba(138, 43, 226, 0.5);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: #9370db;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.camera-button:hover:not(:disabled) {
+  background: rgba(138, 43, 226, 0.4);
+  border-color: rgba(138, 43, 226, 0.7);
+  transform: translateY(-1px);
+}
+
+.camera-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.camera-container {
+  margin-top: 1rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  background: rgba(10, 10, 15, 0.8);
+}
+
+.camera-video {
+  width: 100%;
+  max-height: 400px;
+  min-height: 300px;
+  display: block;
+  object-fit: cover;
+  background: #000;
+  transform: scaleX(-1); /* Mirror the video for better UX */
+}
+
+.camera-controls {
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  justify-content: center;
+  background: rgba(26, 26, 46, 0.6);
+}
+
+.capture-button {
+  background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.capture-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(138, 43, 226, 0.4);
+}
+
+.capture-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancel-camera-button {
+  background: rgba(108, 117, 125, 0.3);
+  border: 1px solid rgba(108, 117, 125, 0.5);
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  color: #b8b8d4;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cancel-camera-button:hover:not(:disabled) {
+  background: rgba(108, 117, 125, 0.5);
+  border-color: rgba(108, 117, 125, 0.7);
+}
+
+.cancel-camera-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .add-form-container {

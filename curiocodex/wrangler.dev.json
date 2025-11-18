@@ -21,6 +21,12 @@
       "preview_id": "e4ae434ecd6443cbaf856053b78ab977"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "ITEM_IMAGES",
+      "bucket_name": "curiocodex-item-images"
+    }
+  ],
   "observability": {
     "enabled": true
   },

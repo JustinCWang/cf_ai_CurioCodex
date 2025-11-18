@@ -177,3 +177,187 @@ export function averageEmbeddings(embeddings: number[][]): number[] {
   return avg;
 }
 
+/**
+ * Analyze an image and extract name, description, and category.
+ * Uses Workers AI vision model to understand the image content.
+ * Returns an object with suggested name, description, and category.
+ */
+export interface ImageAnalysisResult {
+  name: string;
+  description: string;
+  category: string;
+}
+
+export async function analyzeImage(
+  imageData: ArrayBuffer,
+  ai: Ai
+): Promise<ImageAnalysisResult> {
+  try {
+    // Convert ArrayBuffer to number array (pixel data) for vision models
+    const uint8Array = new Uint8Array(imageData);
+    const imageArray = Array.from(uint8Array);
+    
+    // Step 1: Use vision model to describe the image in a paragraph
+    let imageDescription = "";
+    try {
+      // Accept the license agreement first
+      try {
+        await ai.run("@cf/meta/llama-3.2-11b-vision-instruct", {
+          prompt: "agree",
+        });
+      } catch (licenseError: unknown) {
+        const errorMessage = licenseError instanceof Error ? licenseError.message : String(licenseError);
+        if (!errorMessage.includes("Thank you for agreeing")) {
+          throw licenseError;
+        }
+      }
+      
+      // Ask vision model to describe the image
+      const visionResponse = await ai.run("@cf/meta/llama-3.2-11b-vision-instruct", {
+        image: imageArray as number[],
+        prompt: "Describe this image in detail. What is the main object or item? What does it look like? What is it used for? Write a paragraph describing what you see.",
+        max_tokens: 300,
+        temperature: 0.5,
+      });
+
+      // Extract description text from vision model response
+      // Vision model returns { response?: string }
+      if ('response' in visionResponse && visionResponse.response) {
+        imageDescription = String(visionResponse.response);
+      } else if (typeof visionResponse === 'string') {
+        imageDescription = visionResponse;
+      } else {
+        imageDescription = JSON.stringify(visionResponse);
+      }
+      imageDescription = imageDescription.trim();
+    } catch (visionError) {
+      console.error("Vision model error:", visionError);
+      throw new Error("Vision model not available");
+    }
+
+    if (!imageDescription) {
+      throw new Error("No description generated from image");
+    }
+
+    // Step 2: Use text model to extract structured data from the description
+    const extractionPrompt = `Based on this description of an item, extract:
+1. A concise name for the item (2-5 words)
+2. A brief description (1-2 sentences)
+3. A category from this list: ${CATEGORIES.join(", ")}
+
+Item description: ${imageDescription}
+
+Return your response in this exact JSON format:
+{
+  "name": "item name here",
+  "description": "description here",
+  "category": "category name here"
+}`;
+
+    const textResponse = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+      prompt: extractionPrompt,
+      max_tokens: 200,
+      temperature: 0.3,
+    });
+
+    // Check if response is async
+    if ("request_id" in textResponse) {
+      throw new Error("Async response not supported");
+    }
+
+    // Extract response text from text model
+    // Text model returns { response?: string }
+    let responseText = "";
+    if ('response' in textResponse && textResponse.response) {
+      responseText = String(textResponse.response);
+    } else if (typeof textResponse === 'string') {
+      responseText = textResponse;
+    } else {
+      responseText = JSON.stringify(textResponse);
+    }
+    responseText = responseText.trim();
+    
+    // Parse JSON from the text model response
+    let analysis: ImageAnalysisResult;
+    try {
+      // Try to extract JSON from response
+      let jsonMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (!jsonMatch) {
+        jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      }
+      
+      if (jsonMatch) {
+        const jsonStr = jsonMatch[1] || jsonMatch[0];
+        analysis = JSON.parse(jsonStr);
+      } else {
+        // Fallback: extract from text
+        analysis = extractInfoFromText(responseText);
+      }
+    } catch {
+      // Fallback: extract from text
+      analysis = extractInfoFromText(responseText);
+    }
+
+    // Validate and normalize category
+    const normalizedCategory = CATEGORIES.find(
+      (cat) => cat.toLowerCase() === analysis.category.toLowerCase()
+    ) || "Other";
+
+    return {
+      name: analysis.name.trim() || "Unnamed Item",
+      description: analysis.description.trim() || imageDescription.substring(0, 200),
+      category: normalizedCategory,
+    };
+  } catch (error) {
+    console.error("Error analyzing image:", error);
+    // Return default values on error
+    return {
+      name: "Unnamed Item",
+      description: "Unable to analyze image",
+      category: "Other",
+    };
+  }
+}
+
+
+/**
+ * Fallback function to extract information from text if JSON parsing fails.
+ */
+function extractInfoFromText(text: string): ImageAnalysisResult {
+  // Try multiple patterns to extract information from text
+  // Pattern 1: Look for structured format like "Name: ... Description: ... Category: ..."
+  let nameMatch = text.match(/name["\s:]+([^\n,}]+)/i) || 
+                  text.match(/1\.\s*A?\s*concise\s*name[:\s]+([^\n]+)/i) ||
+                  text.match(/name[:\s]+([^\n]+)/i);
+  
+  const descMatch = text.match(/description["\s:]+([^\n}]+)/i) ||
+                  text.match(/2\.\s*A?\s*brief\s*description[:\s]+([^\n]+)/i) ||
+                  text.match(/description[:\s]+([^\n]+)/i);
+  
+  const catMatch = text.match(/category["\s:]+([^\n,}]+)/i) ||
+                 text.match(/3\.\s*A?\s*category[:\s]+([^\n]+)/i) ||
+                 text.match(/category[:\s]+([^\n]+)/i);
+
+  // If we still can't find structured data, try to extract from natural language
+  if (!nameMatch && text.length > 0) {
+    // Take first line or first sentence as name
+    const firstLine = text.split('\n')[0].split('.')[0].trim();
+    if (firstLine.length > 0 && firstLine.length < 100) {
+      nameMatch = [firstLine, firstLine];
+    }
+  }
+
+  // Extract category from the category list if found
+  const category = catMatch ? catMatch[1].trim() : "Other";
+  // Normalize category to match our list
+  const normalizedCategory = CATEGORIES.find(
+    (cat) => cat.toLowerCase() === category.toLowerCase()
+  ) || "Other";
+
+  return {
+    name: nameMatch ? nameMatch[1].trim().replace(/^["']|["']$/g, '') : "Unnamed Item",
+    description: descMatch ? descMatch[1].trim().replace(/^["']|["']$/g, '') : text.substring(0, 200) || "No description available",
+    category: normalizedCategory,
+  };
+}
+

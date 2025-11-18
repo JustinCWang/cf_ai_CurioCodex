@@ -20,6 +20,7 @@ interface Item {
   description: string | null;
   category: string | null;
   tags: string[];
+  image_url: string | null;
   created_at: number;
   hobby_id?: string;
 }
@@ -224,6 +225,19 @@ function Items() {
                   {group.items.map((item) => (
                     <div key={item.id} className="item-card">
                       <div className="card-glow"></div>
+                      {item.image_url && (
+                        <div className="item-image-container">
+                          <img 
+                            src={item.image_url} 
+                            alt={item.name} 
+                            className="item-image"
+                            onError={(e) => {
+                              // Hide image on error
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
                       <h3>{item.name}</h3>
                       {item.description && (
                         <p className="card-description">{item.description}</p>

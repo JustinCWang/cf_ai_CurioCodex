@@ -27,6 +27,12 @@
       "index_name": "hobby-items-index"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "ITEM_IMAGES",
+      "bucket_name": "curiocodex-item-images"
+    }
+  ],
   "observability": {
     "enabled": true
   },

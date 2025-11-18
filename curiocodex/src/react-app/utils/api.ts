@@ -5,6 +5,7 @@
 /**
  * Make an authenticated API request.
  * Automatically includes the Authorization header with the user's token.
+ * Handles both JSON and FormData requests.
  */
 export async function apiRequest(
   endpoint: string,
@@ -12,9 +13,14 @@ export async function apiRequest(
   token: string | null
 ): Promise<Response> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
+
+  // Only set Content-Type for non-FormData requests
+  // FormData requests should let the browser set the Content-Type with boundary
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;

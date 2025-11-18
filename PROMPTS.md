@@ -11,3 +11,5 @@ Cloudflare's Vectorize and Vite seem to be in conflict and causing my local deve
 We need to implement the rest of the CRUD operations to allow for editing and deleting of hobbies and items, can you help me figure out what methods frmo the Cloudflare documentation we would need to implement these and create a simple frontend UI for these features?
 
 To add a failsafe to the AI categorization, can you add onto the UI to allow for the new manual categorty selection we implemented in the backend? This should be a dropdown. 
+
+I want to exapand our capabilities ofof adding items by also allowing an image of an item to be uploaded or taken. We want our user to be able to go to add an item, upload or take a photo of the item, and then have some AI try to come up with a name, description, and category optionally from the image, unless the user manually enters these two fields. Does our current Cloudflare database support images and how does accessing phone/computer camera work?

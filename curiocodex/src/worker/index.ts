@@ -17,6 +17,7 @@ import {
   categorizeItem,
   extractTags,
   averageEmbeddings,
+  analyzeImage,
 } from "./ai";
 
 interface Env {
@@ -24,6 +25,7 @@ interface Env {
   SESSIONS: KVNamespace;
   AI: Ai;
   HOBBY_ITEMS_INDEX: VectorizeIndex;
+  ITEM_IMAGES: R2Bucket;
 }
 
 interface Variables {
@@ -49,6 +51,7 @@ interface ItemRow {
   description: string | null;
   category: string | null;
   tags: string | null;
+  image_url: string | null;
   created_at: number;
 }
 
@@ -200,7 +203,7 @@ app.post("/api/auth/logout", async (c) => {
  */
 app.use("/api/*", async (c, next) => {
   // Skip auth for public routes
-  const publicRoutes = ["/api/auth/login", "/api/auth/register"];
+  const publicRoutes = ["/api/auth/login", "/api/auth/register", "/api/images"];
   if (publicRoutes.some(route => c.req.path.includes(route))) {
     await next();
     return;
@@ -578,14 +581,92 @@ app.delete("/api/hobbies/:id", async (c) => {
 /**
  * POST /api/hobbies/:hobbyId/items
  * Create a new item within a hobby with AI features.
+ * Supports both JSON and FormData (for image uploads).
  */
 app.post("/api/hobbies/:hobbyId/items", async (c) => {
   const user = c.get("user");
   const hobbyId = c.req.param("hobbyId");
-  const { name, description, category: providedCategory } = await c.req.json();
+  
+  let name: string | undefined;
+  let description: string | undefined;
+  let providedCategory: string | undefined;
+  let imageFile: File | null = null;
+  let imageUrl: string | null = null;
 
-  if (!name) {
-    return c.json({ error: "Name is required" }, 400);
+  // Check if request is FormData (image upload) or JSON
+  const contentType = c.req.header("Content-Type") || "";
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await c.req.formData();
+    name = formData.get("name") as string | undefined;
+    description = formData.get("description") as string | undefined;
+    providedCategory = formData.get("category") as string | undefined;
+    imageFile = formData.get("image") as File | null;
+  } else {
+    const body = await c.req.json();
+    name = body.name;
+    description = body.description;
+    providedCategory = body.category;
+  }
+
+  // Generate itemId early so we can use it for image key
+  const itemId = crypto.randomUUID();
+
+  // Name is required unless we have an image (AI will generate name from image)
+  if ((!name || !name.trim()) && (!imageFile || imageFile.size === 0)) {
+    return c.json({ error: "Name is required, or upload an image for AI to generate one" }, 400);
+  }
+
+  // If image is provided, upload to R2 and optionally analyze it
+  if (imageFile && imageFile.size > 0) {
+    try {
+      const fileExtension = imageFile.name.split(".").pop() || "jpg";
+      const imageKey = `items/${user.userId}/${itemId}.${fileExtension}`;
+      
+      // Upload image to R2
+      await c.env.ITEM_IMAGES.put(imageKey, imageFile.stream(), {
+        httpMetadata: {
+          contentType: imageFile.type || "image/jpeg",
+        },
+      });
+
+      // Generate public URL (in production, you'd use a custom domain or R2 public URL)
+      // For now, we'll use a placeholder that the frontend can handle
+      imageUrl = `/api/images/${imageKey}`;
+
+      // If name or description are not provided, analyze the image with AI
+      if ((!name || !name.trim()) || (!description || !description.trim())) {
+        try {
+          const imageArrayBuffer = await imageFile.arrayBuffer();
+          const analysis = await analyzeImage(imageArrayBuffer, c.env.AI);
+          
+          // Only use AI suggestions if user hasn't provided values
+          if (!name || !name.trim()) {
+            name = analysis.name;
+          }
+          if (!description || !description.trim()) {
+            description = analysis.description;
+          }
+          // Use AI category if no category was provided
+          if (!providedCategory) {
+            providedCategory = analysis.category;
+          }
+        } catch (analysisError) {
+          console.error("Error analyzing image:", analysisError);
+          // If name is still empty after failed analysis, set a default
+          if (!name || !name.trim()) {
+            name = "Unnamed Item";
+          }
+        }
+      }
+    } catch (uploadError) {
+      console.error("Error uploading image:", uploadError);
+      return c.json({ error: "Failed to upload image" }, 500);
+    }
+  }
+
+  // Ensure name is always defined before proceeding
+  if (!name || !name.trim()) {
+    name = "Unnamed Item";
   }
 
   try {
@@ -611,19 +692,19 @@ app.post("/api/hobbies/:hobbyId/items", async (c) => {
     const tags = await extractTags(name, description || null, c.env.AI);
 
     // Create item in D1
-    const itemId = crypto.randomUUID();
     await c.env.DB.prepare(
-      `INSERT INTO items (id, hobby_id, name, description, category, tags, embedding_id) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO items (id, hobby_id, name, description, category, tags, embedding_id, image_url) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
       .bind(
         itemId,
         hobbyId,
-        name,
-        description || null,
+        name.trim(),
+        description?.trim() || null,
         category,
         JSON.stringify(tags),
-        itemId
+        itemId,
+        imageUrl
       )
       .run();
 
@@ -654,10 +735,11 @@ app.post("/api/hobbies/:hobbyId/items", async (c) => {
       success: true,
       item: {
         id: itemId,
-        name,
-        description,
+        name: name.trim(),
+        description: description?.trim() || null,
         category,
         tags,
+        image_url: imageUrl,
       },
     });
   } catch (error) {
@@ -686,7 +768,7 @@ app.get("/api/hobbies/:hobbyId/items", async (c) => {
   }
 
   const items = await c.env.DB.prepare(
-    "SELECT id, name, description, category, tags, created_at FROM items WHERE hobby_id = ? ORDER BY created_at DESC"
+    "SELECT id, name, description, category, tags, image_url, created_at FROM items WHERE hobby_id = ? ORDER BY created_at DESC"
   )
     .bind(hobbyId)
     .all<ItemRow>();
@@ -960,6 +1042,41 @@ app.get("/api/discover/by-category/:category", async (c) => {
   }));
 
   return c.json({ hobbies: hobbiesWithParsedTags });
+});
+
+// ============================================================================
+// Image Serving Routes
+// ============================================================================
+
+/**
+ * GET /api/images/*
+ * Serve images from R2 bucket.
+ * This endpoint is public (no auth required) since images are loaded via <img> tags.
+ */
+app.get("/api/images/*", async (c) => {
+  const imageKey = c.req.path.replace("/api/images/", "");
+  
+  try {
+    const object = await c.env.ITEM_IMAGES.get(imageKey);
+    
+    if (!object) {
+      return c.json({ error: "Image not found" }, 404);
+    }
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+    headers.set("etag", object.httpEtag);
+    // Add CORS headers for image loading
+    headers.set("Access-Control-Allow-Origin", "*");
+    headers.set("Cache-Control", "public, max-age=31536000");
+
+    return new Response(object.body, {
+      headers,
+    });
+  } catch (error) {
+    console.error("Error serving image:", error);
+    return c.json({ error: "Failed to serve image" }, 500);
+  }
 });
 
 // ============================================================================
