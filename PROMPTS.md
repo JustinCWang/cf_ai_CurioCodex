@@ -18,3 +18,4 @@ Can you explain to me how semantic search works in the context of our webapp so 
 
 It seems like my vector database is missing metadata and failing the query, can you explain to me what parameters the vector database expects and why we would be failing to have them? Can you also help me implement some debugging tools and a way to revectorize just in case that is the problem?
 
+Can you pull all the prompts I am currently using and methods that call LLMS? I want to refine them and check the models. For each model, explain their specs from the Cloudflare docs. 

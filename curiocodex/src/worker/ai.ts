@@ -152,6 +152,41 @@ Tags:`;
 }
 
 /**
+ * Generate a concise item description from just the item name.
+ * Used when the user only provides a name (no description, no image).
+ */
+export async function generateDescriptionFromName(
+  name: string,
+  ai: Ai
+): Promise<string | null> {
+  try {
+    const prompt = `You are helping a user catalog items in their hobby collection.
+Given only the item name, write a short, neutral description of what the item most likely is.
+Keep it factual and avoid guessing personal details.
+
+Item name: ${name}
+
+Write 1–2 sentences describing the item. Return only the description text, no bullet points or extra commentary.`;
+
+    const response = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+      prompt,
+      max_tokens: 80,
+      temperature: 0.4,
+    });
+
+    if ("request_id" in response) {
+      throw new Error("Async response not supported");
+    }
+
+    const description = (response.response || "").trim();
+    return description || null;
+  } catch (error) {
+    console.error("Error generating description from name:", error);
+    return null;
+  }
+}
+
+/**
  * Calculate average embedding from multiple embeddings.
  * Useful for creating user interest profiles.
  */
@@ -188,9 +223,16 @@ export interface ImageAnalysisResult {
   category: string;
 }
 
+interface ImageAnalysisContext {
+  name?: string | null;
+  description?: string | null;
+  category?: string | null;
+}
+
 export async function analyzeImage(
   imageData: ArrayBuffer,
-  ai: Ai
+  ai: Ai,
+  context?: ImageAnalysisContext
 ): Promise<ImageAnalysisResult> {
   try {
     // Convert ArrayBuffer to number array (pixel data) for vision models
@@ -212,10 +254,40 @@ export async function analyzeImage(
         }
       }
       
+      // Build contextual prefix from any user-provided fields
+      let contextPrefix = "";
+      if (context) {
+        const contextLines: string[] = [];
+        if (context.name && context.name.trim()) {
+          contextLines.push(`Item name (from user): ${context.name.trim()}`);
+        }
+        if (context.description && context.description.trim()) {
+          contextLines.push(`Item description (from user): ${context.description.trim()}`);
+        }
+        if (context.category && context.category.trim()) {
+          contextLines.push(`Item category (from user): ${context.category.trim()}`);
+        }
+
+        if (contextLines.length > 0) {
+          contextPrefix =
+            "You are helping a user catalog an item in their hobby collection.\n" +
+            "The user has already provided some information about the item. Use it as helpful context, " +
+            "but correct it if the image clearly shows something different.\n\n" +
+            contextLines.join("\n") +
+            "\n\n";
+        }
+      }
+
       // Ask vision model to describe the image
       const visionResponse = await ai.run("@cf/meta/llama-3.2-11b-vision-instruct", {
         image: imageArray as number[],
-        prompt: "Describe this image in detail. What is the main object or item? What does it look like? What is it used for? Write a paragraph describing what you see.",
+        prompt:
+          contextPrefix +
+          "Describe this image in rich visual detail, focusing on the main object or item. " +
+          "Include colors, materials, markings, logos or text, condition, and anything in the background that helps identify what it is. " +
+          "Then, give your best guess at the specific item name or type (for example: 'Beyblade Burst battle top', 'Pokemon trading card', etc.). " +
+          "Finally, say whether it appears to be a collectible item or not, and explain why (for example: special edition markings, packaging, display context, or overall condition). " +
+          "Write 1–2 concise paragraphs that clearly mention the guessed item name and whether it is likely a collectible.",
         max_tokens: 300,
         temperature: 0.5,
       });
@@ -240,12 +312,25 @@ export async function analyzeImage(
     }
 
     // Step 2: Use text model to extract structured data from the description
+    // Include any user-provided context again so the model can refine rather than contradict it.
+    const userContextForExtraction =
+      context && (context.name || context.description || context.category)
+        ? `
+User-provided context (may be partial or approximate):
+- Name: ${context.name || "N/A"}
+- Description: ${context.description || "N/A"}
+- Category: ${context.category || "N/A"}
+
+Use this context as a hint, but prefer what you actually see in the image if there is a conflict.
+`
+        : "";
+
     const extractionPrompt = `Based on this description of an item, extract:
 1. A concise name for the item (2-5 words)
 2. A brief description (1-2 sentences)
 3. A category from this list: ${CATEGORIES.join(", ")}
-
-Item description: ${imageDescription}
+${userContextForExtraction}
+Item description from the image model: ${imageDescription}
 
 Return your response in this exact JSON format:
 {

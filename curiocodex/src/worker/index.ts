@@ -18,6 +18,7 @@ import {
   extractTags,
   averageEmbeddings,
   analyzeImage,
+  generateDescriptionFromName,
 } from "./ai";
 
 interface Env {
@@ -633,11 +634,19 @@ app.post("/api/hobbies/:hobbyId/items", async (c) => {
       // For now, we'll use a placeholder that the frontend can handle
       imageUrl = `/api/images/${imageKey}`;
 
-      // If name or description are not provided, analyze the image with AI
-      if ((!name || !name.trim()) || (!description || !description.trim())) {
+      // If any of name, description, or category are not provided, analyze the image with AI
+      if (
+        (!name || !name.trim()) ||
+        (!description || !description.trim()) ||
+        !providedCategory
+      ) {
         try {
           const imageArrayBuffer = await imageFile.arrayBuffer();
-          const analysis = await analyzeImage(imageArrayBuffer, c.env.AI);
+          const analysis = await analyzeImage(imageArrayBuffer, c.env.AI, {
+            name: name,
+            description: description,
+            category: providedCategory,
+          });
           
           // Only use AI suggestions if user hasn't provided values
           if (!name || !name.trim()) {
@@ -667,6 +676,20 @@ app.post("/api/hobbies/:hobbyId/items", async (c) => {
   // Ensure name is always defined before proceeding
   if (!name || !name.trim()) {
     name = "Unnamed Item";
+  }
+
+  // If we only have a name (no description and no image-based analysis), try to
+  // generate a brief description from the name so the item isn't empty.
+  if (!description || !description.trim()) {
+    try {
+      const generated = await generateDescriptionFromName(name, c.env.AI);
+      if (generated && generated.trim()) {
+        description = generated;
+      }
+    } catch (descError) {
+      console.error("Error generating description from name:", descError);
+      // Safe to continue without a description
+    }
   }
 
   try {
