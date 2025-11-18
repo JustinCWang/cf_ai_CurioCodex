@@ -127,6 +127,19 @@ function Add() {
   };
 
   const handleStartCamera = async () => {
+    // Check if getUserMedia is available
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setError("Camera API not supported in this browser. Please use file upload instead.");
+      return;
+    }
+
+    // Check if we're on HTTPS or localhost (required for camera access)
+    const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (!isSecure) {
+      setError("Camera access requires HTTPS. Please use file upload instead.");
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
@@ -137,15 +150,32 @@ function Add() {
       });
       setCameraStream(stream);
       setShowCamera(true);
+      setError(""); // Clear any previous errors
     } catch (error) {
       console.error("Error accessing camera:", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('permission')) {
-        setError("Camera permission denied. Please allow camera access in your browser settings.");
-      } else if (errorMessage.includes('not found')) {
+      const errorName = error instanceof Error ? error.name : '';
+      
+      if (errorName === 'NotAllowedError' || errorMessage.includes('permission') || errorMessage.includes('denied')) {
+        setError("Camera permission denied. Please allow camera access in your browser settings and try again.");
+      } else if (errorName === 'NotFoundError' || errorMessage.includes('not found') || errorMessage.includes('no device')) {
         setError("No camera found. Please connect a camera or use file upload instead.");
+      } else if (errorName === 'NotReadableError' || errorMessage.includes('not readable')) {
+        setError("Camera is already in use by another application. Please close other apps using the camera.");
+      } else if (errorName === 'OverconstrainedError') {
+        setError("Camera doesn't support the requested settings. Trying with default settings...");
+        // Fallback: try with simpler constraints
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          setCameraStream(fallbackStream);
+          setShowCamera(true);
+          setError("");
+          return;
+        } catch {
+          setError("Unable to access camera. Please use file upload instead.");
+        }
       } else {
-        setError("Unable to access camera. Please check permissions.");
+        setError(`Unable to access camera: ${errorMessage}. Please use file upload instead.`);
       }
     }
   };
