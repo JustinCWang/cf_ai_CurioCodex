@@ -479,7 +479,7 @@ app.put("/api/hobbies/:id", async (c) => {
     // Update embedding in Vectorize (optional in local dev)
     if (c.env.HOBBY_ITEMS_INDEX) {
       try {
-        await c.env.HOBBY_ITEMS_INDEX.insert([
+        await c.env.HOBBY_ITEMS_INDEX.upsert([
           {
             id: hobbyId,
             values: embedding,
@@ -845,7 +845,7 @@ app.put("/api/hobbies/:hobbyId/items/:id", async (c) => {
     // Update embedding in Vectorize (optional in local dev)
     if (c.env.HOBBY_ITEMS_INDEX) {
       try {
-        await c.env.HOBBY_ITEMS_INDEX.insert([
+        await c.env.HOBBY_ITEMS_INDEX.upsert([
           {
             id: itemId,
             values: embedding,
@@ -1153,8 +1153,11 @@ app.post("/api/discover/search", async (c) => {
 
       console.log(`Filtered ${matches.matches.length} matches to ${userMatches.length} user matches`);
 
+      // If all matches were filtered out (missing metadata), fallback to text search
       if (userMatches.length === 0) {
-        return c.json({ hobbies: [], items: [], searchMethod: "semantic" as const });
+        console.warn("All semantic search matches were filtered out (missing metadata), falling back to text search");
+        // Fall through to text search fallback below
+        throw new Error("No valid semantic matches found");
       }
 
       // Separate hobbies and items by type
@@ -1284,6 +1287,99 @@ app.post("/api/discover/search", async (c) => {
   } catch (error) {
     console.error("Error performing semantic search:", error);
     return c.json({ error: "Failed to perform search" }, 500);
+  }
+});
+
+/**
+ * POST /api/admin/repair-vectorize-metadata
+ * Re-insert all existing hobbies and items into Vectorize with proper metadata.
+ * This fixes vectors that were inserted without metadata.
+ */
+app.post("/api/admin/repair-vectorize-metadata", async (c) => {
+  const user = c.get("user");
+
+  try {
+    // Get all user's hobbies
+    const hobbies = await c.env.DB.prepare(
+      "SELECT id, name, description, category, user_id FROM hobbies WHERE user_id = ?"
+    ).bind(user.userId).all<{
+      id: string;
+      name: string;
+      description: string | null;
+      category: string;
+      user_id: string;
+    }>();
+
+    // Get all user's items
+    const items = await c.env.DB.prepare(
+      `SELECT i.id, i.name, i.description, i.category, i.hobby_id, h.user_id
+       FROM items i
+       INNER JOIN hobbies h ON i.hobby_id = h.id
+       WHERE h.user_id = ?`
+    ).bind(user.userId).all<{
+      id: string;
+      name: string;
+      description: string | null;
+      category: string;
+      hobby_id: string;
+      user_id: string;
+    }>();
+
+    if (!c.env.HOBBY_ITEMS_INDEX) {
+      return c.json({ error: "Vectorize not available" }, 400);
+    }
+
+    const vectorsToUpsert = [];
+
+    // Re-generate embeddings and add metadata for hobbies
+    for (const hobby of hobbies.results) {
+      const fullText = `${hobby.name} ${hobby.description || ""}`.trim();
+      const embedding = await generateEmbedding(fullText, c.env.AI);
+
+      vectorsToUpsert.push({
+        id: hobby.id,
+        values: embedding,
+        metadata: {
+          type: "hobby",
+          userId: hobby.user_id,
+          name: hobby.name,
+          category: hobby.category,
+        },
+      });
+    }
+
+    // Re-generate embeddings and add metadata for items
+    for (const item of items.results) {
+      const fullText = `${item.name} ${item.description || ""}`.trim();
+      const embedding = await generateEmbedding(fullText, c.env.AI);
+
+      vectorsToUpsert.push({
+        id: item.id,
+        values: embedding,
+        metadata: {
+          type: "item",
+          userId: item.user_id,
+          hobbyId: item.hobby_id,
+          name: item.name,
+          category: item.category,
+        },
+      });
+    }
+
+    // Use upsert to update existing vectors or create new ones
+    if (vectorsToUpsert.length > 0) {
+      await c.env.HOBBY_ITEMS_INDEX.upsert(vectorsToUpsert);
+    }
+
+    return c.json({
+      success: true,
+      repaired: vectorsToUpsert.length,
+      hobbies: hobbies.results.length,
+      items: items.results.length,
+    });
+  } catch (error) {
+    console.error("Error repairing Vectorize metadata:", error);
+    return c.json({ error: "Failed to repair metadata" }, 500);
   }
 });
 
