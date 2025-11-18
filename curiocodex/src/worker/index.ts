@@ -1052,7 +1052,11 @@ app.get("/api/discover/by-category/:category", async (c) => {
  */
 app.post("/api/discover/search", async (c) => {
   const user = c.get("user");
-  const { query, limit = 20 } = await c.req.json();
+  const { query, limit = 20, mode } = await c.req.json<{
+    query?: string;
+    limit?: number;
+    mode?: "semantic" | "text";
+  }>();
 
   if (!query || !query.trim()) {
     return c.json({ error: "Search query is required" }, 400);
@@ -1062,43 +1066,53 @@ app.post("/api/discover/search", async (c) => {
     return c.json({ error: "User not authenticated" }, 401);
   }
 
+  // Helper: plain text search in D1
+  const runTextSearch = async () => {
+    const searchTerm = `%${query}%`;
+    const hobbies = await c.env.DB.prepare(
+      `SELECT id, name, description, category, tags, created_at 
+       FROM hobbies 
+       WHERE user_id = ? AND (name LIKE ? OR description LIKE ?)
+       ORDER BY created_at DESC LIMIT ?`
+    )
+      .bind(user.userId, searchTerm, searchTerm, limit)
+      .all<HobbyRow>();
+
+    const items = await c.env.DB.prepare(
+      `SELECT i.id, i.name, i.description, i.category, i.tags, i.created_at, i.hobby_id
+       FROM items i
+       INNER JOIN hobbies h ON i.hobby_id = h.id
+       WHERE h.user_id = ? AND (i.name LIKE ? OR i.description LIKE ?)
+       ORDER BY i.created_at DESC LIMIT ?`
+    )
+      .bind(user.userId, searchTerm, searchTerm, limit)
+      .all<ItemRow & { hobby_id: string }>();
+
+    return c.json({
+      hobbies: hobbies.results.map((h) => ({
+        ...h,
+        tags: h.tags ? JSON.parse(h.tags) as string[] : [],
+        type: "hobby" as const,
+      })),
+      items: items.results.map((i) => ({
+        ...i,
+        tags: i.tags ? JSON.parse(i.tags) as string[] : [],
+        type: "item" as const,
+      })),
+      searchMethod: "text" as const,
+    });
+  };
+
+  // If the client explicitly requests text mode, skip Vectorize entirely
+  if (mode === "text") {
+    return runTextSearch();
+  }
+
   try {
     // Try to get search results using Vectorize (may not be available in local dev)
     if (!c.env.HOBBY_ITEMS_INDEX) {
       // Fallback to simple text search in database
-      const searchTerm = `%${query}%`;
-      const hobbies = await c.env.DB.prepare(
-        `SELECT id, name, description, category, tags, created_at 
-         FROM hobbies 
-         WHERE user_id = ? AND (name LIKE ? OR description LIKE ?)
-         ORDER BY created_at DESC LIMIT ?`
-      )
-        .bind(user.userId, searchTerm, searchTerm, limit)
-        .all<HobbyRow>();
-
-      const items = await c.env.DB.prepare(
-        `SELECT i.id, i.name, i.description, i.category, i.tags, i.created_at, i.hobby_id
-         FROM items i
-         INNER JOIN hobbies h ON i.hobby_id = h.id
-         WHERE h.user_id = ? AND (i.name LIKE ? OR i.description LIKE ?)
-         ORDER BY i.created_at DESC LIMIT ?`
-      )
-        .bind(user.userId, searchTerm, searchTerm, limit)
-        .all<ItemRow & { hobby_id: string }>();
-
-      return c.json({
-        hobbies: hobbies.results.map((h) => ({
-          ...h,
-          tags: h.tags ? JSON.parse(h.tags) as string[] : [],
-          type: "hobby" as const,
-        })),
-        items: items.results.map((i) => ({
-          ...i,
-          tags: i.tags ? JSON.parse(i.tags) as string[] : [],
-          type: "item" as const,
-        })),
-        searchMethod: "text" as const,
-      });
+      return runTextSearch();
     }
 
     try {
@@ -1117,17 +1131,6 @@ app.post("/api/discover/search", async (c) => {
         return c.json({ hobbies: [], items: [], searchMethod: "semantic" as const });
       }
 
-      // Debug logging to understand the structure
-      console.log("Vectorize query returned matches:", matches.matches.length);
-      if (matches.matches.length > 0) {
-        console.log("First match structure:", {
-          id: matches.matches[0].id,
-          hasMetadata: !!matches.matches[0].metadata,
-          metadata: matches.matches[0].metadata,
-          score: matches.matches[0].score,
-        });
-      }
-
       // Filter to only user's items/hobbies
       // Handle cases where metadata might be undefined or missing userId
       const userMatches = matches.matches.filter((m) => {
@@ -1136,7 +1139,6 @@ app.post("/api/discover/search", async (c) => {
             return false;
           }
           if (!m.metadata) {
-            console.warn("Match missing metadata:", m.id);
             return false; // Skip matches without metadata
           }
           const metadata = m.metadata as Record<string, unknown>;
@@ -1144,7 +1146,6 @@ app.post("/api/discover/search", async (c) => {
           
           // Safely check userId - handle both string and undefined cases
           if (!matchUserId) {
-            console.warn("Match metadata missing userId:", { id: m.id, metadata });
             return false;
           }
           
@@ -1155,13 +1156,10 @@ app.post("/api/discover/search", async (c) => {
         }
       }).slice(0, limit);
 
-      console.log(`Filtered ${matches.matches.length} matches to ${userMatches.length} user matches`);
-
-      // If all matches were filtered out (missing metadata), fallback to text search
+      // If all matches were filtered out, fallback to text search
       if (userMatches.length === 0) {
-        console.warn("All semantic search matches were filtered out (missing metadata), falling back to text search");
         // Fall through to text search fallback below
-        throw new Error("No valid semantic matches found");
+        throw new Error("No semantic matches found for this user");
       }
 
       // Separate hobbies and items by type
@@ -1240,53 +1238,9 @@ app.post("/api/discover/search", async (c) => {
         searchMethod: "semantic" as const,
       });
     } catch (vectorizeError) {
-      // Vectorize not available in local dev - fallback to text search
+      // Semantic search failed for some reason - fallback to text search
       console.error("Vectorize search failed, falling back to text search:", vectorizeError);
-      console.error("Error details:", {
-        message: vectorizeError instanceof Error ? vectorizeError.message : String(vectorizeError),
-        stack: vectorizeError instanceof Error ? vectorizeError.stack : undefined,
-        userExists: !!user,
-        userId: user?.userId,
-      });
-      
-      // Ensure user exists before using it in fallback
-      if (!user || !user.userId) {
-        return c.json({ error: "User not authenticated" }, 401);
-      }
-      
-      const searchTerm = `%${query}%`;
-      const hobbies = await c.env.DB.prepare(
-        `SELECT id, name, description, category, tags, created_at 
-         FROM hobbies 
-         WHERE user_id = ? AND (name LIKE ? OR description LIKE ?)
-         ORDER BY created_at DESC LIMIT ?`
-      )
-        .bind(user.userId, searchTerm, searchTerm, limit)
-        .all<HobbyRow>();
-
-      const items = await c.env.DB.prepare(
-        `SELECT i.id, i.name, i.description, i.category, i.tags, i.created_at, i.hobby_id
-         FROM items i
-         INNER JOIN hobbies h ON i.hobby_id = h.id
-         WHERE h.user_id = ? AND (i.name LIKE ? OR i.description LIKE ?)
-         ORDER BY i.created_at DESC LIMIT ?`
-      )
-        .bind(user.userId, searchTerm, searchTerm, limit)
-        .all<ItemRow & { hobby_id: string }>();
-
-      return c.json({
-        hobbies: hobbies.results.map((h) => ({
-          ...h,
-          tags: h.tags ? JSON.parse(h.tags) as string[] : [],
-          type: "hobby" as const,
-        })),
-        items: items.results.map((i) => ({
-          ...i,
-          tags: i.tags ? JSON.parse(i.tags) as string[] : [],
-          type: "item" as const,
-        })),
-        searchMethod: "text" as const,
-      });
+      return runTextSearch();
     }
   } catch (error) {
     console.error("Error performing semantic search:", error);

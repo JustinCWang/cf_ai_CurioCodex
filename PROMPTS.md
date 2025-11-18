@@ -15,3 +15,6 @@ To add a failsafe to the AI categorization, can you add onto the UI to allow for
 I want to exapand our capabilities of adding items by also allowing an image of an item to be uploaded or taken. We want our user to be able to go to add an item, upload or take a photo of the item, and then have some AI try to come up with a name, description, and category optionally from the image, unless the user manually enters these two fields. Does our current Cloudflare database support images and how does accessing phone/computer camera work?
 
 Can you explain to me how semantic search works in the context of our webapp so far as well as create a basic frontend ui for testing? My goal is to have it allow us to search through all the items in our hobbies that we have added. What should I know about the Cloudflare vectorize index to do this?
+
+It seems like my vector database is missing metadata and failing the query, can you explain to me what parameters the vector database expects and why we would be failing to have them? Can you also help me implement some debugging tools and a way to revectorize just in case that is the problem?
+

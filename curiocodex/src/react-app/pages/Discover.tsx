@@ -33,6 +33,7 @@ function Discover() {
   const [error, setError] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
   const [searchMethod, setSearchMethod] = useState<"semantic" | "text" | null>(null);
+  const [preferredMode, setPreferredMode] = useState<"semantic" | "text">("semantic");
   const { token, isAuthenticated } = useAuth();
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
@@ -51,7 +52,11 @@ function Discover() {
         "/api/discover/search",
         {
           method: "POST",
-          body: JSON.stringify({ query: searchQuery.trim(), limit: 20 }),
+          body: JSON.stringify({
+            query: searchQuery.trim(),
+            limit: 20,
+            mode: preferredMode,
+          }),
         },
         token
       );
@@ -68,7 +73,7 @@ function Discover() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, token]);
+  }, [searchQuery, preferredMode, token]);
 
   const totalResults = searchResults 
     ? searchResults.hobbies.length + searchResults.items.length 
@@ -98,6 +103,30 @@ function Discover() {
 
         {/* Search Form */}
         <form onSubmit={handleSearch} className="search-form">
+          <div className="search-mode-toggle">
+            <button
+              type="button"
+              className={`mode-button ${preferredMode === "semantic" ? "active" : ""}`}
+              onClick={() => setPreferredMode("semantic")}
+              disabled={loading}
+            >
+              🧠 Semantic
+            </button>
+            <button
+              type="button"
+              className={`mode-button ${preferredMode === "text" ? "active" : ""}`}
+              onClick={() => setPreferredMode("text")}
+              disabled={loading}
+            >
+              🔤 Text
+            </button>
+            <span className="mode-help">
+              {preferredMode === "semantic"
+                ? "AI-powered search by meaning (falls back to text if needed)."
+                : "Simple keyword search only."}
+            </span>
+          </div>
+
           <div className="search-input-container">
             <input
               type="text"
