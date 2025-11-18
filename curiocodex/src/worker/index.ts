@@ -1056,6 +1056,10 @@ app.post("/api/discover/search", async (c) => {
     return c.json({ error: "Search query is required" }, 400);
   }
 
+  if (!user || !user.userId) {
+    return c.json({ error: "User not authenticated" }, 401);
+  }
+
   try {
     // Try to get search results using Vectorize (may not be available in local dev)
     if (!c.env.HOBBY_ITEMS_INDEX) {
@@ -1104,11 +1108,50 @@ app.post("/api/discover/search", async (c) => {
         topK: limit * 2, // Get more to filter by user
       });
 
+      // Ensure matches array exists
+      if (!matches || !matches.matches || matches.matches.length === 0) {
+        return c.json({ hobbies: [], items: [], searchMethod: "semantic" as const });
+      }
+
+      // Debug logging to understand the structure
+      console.log("Vectorize query returned matches:", matches.matches.length);
+      if (matches.matches.length > 0) {
+        console.log("First match structure:", {
+          id: matches.matches[0].id,
+          hasMetadata: !!matches.matches[0].metadata,
+          metadata: matches.matches[0].metadata,
+          score: matches.matches[0].score,
+        });
+      }
+
       // Filter to only user's items/hobbies
+      // Handle cases where metadata might be undefined or missing userId
       const userMatches = matches.matches.filter((m) => {
-        const metadata = m.metadata as { userId?: string };
-        return metadata.userId === user.userId;
+        try {
+          if (!m) {
+            return false;
+          }
+          if (!m.metadata) {
+            console.warn("Match missing metadata:", m.id);
+            return false; // Skip matches without metadata
+          }
+          const metadata = m.metadata as Record<string, unknown>;
+          const matchUserId = metadata.userId as string | undefined;
+          
+          // Safely check userId - handle both string and undefined cases
+          if (!matchUserId) {
+            console.warn("Match metadata missing userId:", { id: m.id, metadata });
+            return false;
+          }
+          
+          return matchUserId === user.userId;
+        } catch (err) {
+          console.error("Error filtering match:", err, { matchId: m?.id });
+          return false;
+        }
       }).slice(0, limit);
+
+      console.log(`Filtered ${matches.matches.length} matches to ${userMatches.length} user matches`);
 
       if (userMatches.length === 0) {
         return c.json({ hobbies: [], items: [], searchMethod: "semantic" as const });
@@ -1119,6 +1162,9 @@ app.post("/api/discover/search", async (c) => {
       const itemIds: string[] = [];
 
       userMatches.forEach((match) => {
+        if (!match.metadata) {
+          return; // Skip matches without metadata
+        }
         const metadata = match.metadata as { type?: string };
         if (metadata.type === "hobby") {
           hobbyIds.push(match.id);
@@ -1188,7 +1234,18 @@ app.post("/api/discover/search", async (c) => {
       });
     } catch (vectorizeError) {
       // Vectorize not available in local dev - fallback to text search
-      console.warn("Vectorize search failed, falling back to text search:", vectorizeError);
+      console.error("Vectorize search failed, falling back to text search:", vectorizeError);
+      console.error("Error details:", {
+        message: vectorizeError instanceof Error ? vectorizeError.message : String(vectorizeError),
+        stack: vectorizeError instanceof Error ? vectorizeError.stack : undefined,
+        userExists: !!user,
+        userId: user?.userId,
+      });
+      
+      // Ensure user exists before using it in fallback
+      if (!user || !user.userId) {
+        return c.json({ error: "User not authenticated" }, 401);
+      }
       
       const searchTerm = `%${query}%`;
       const hobbies = await c.env.DB.prepare(
