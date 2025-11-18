@@ -980,6 +980,8 @@ app.get("/api/discover/recommendations", async (c) => {
       // Note: Vectorize filter doesn't support $ne, so we'll filter in code
       const matches = await c.env.HOBBY_ITEMS_INDEX.query(avgEmbedding, {
         topK: 20, // Get more to filter out user's own items
+        // Explicitly request metadata so we can filter by userId
+        returnMetadata: "all",
       });
 
       // Filter out user's own items and get top 10
@@ -1106,6 +1108,8 @@ app.post("/api/discover/search", async (c) => {
       // Search Vectorize for similar items
       const matches = await c.env.HOBBY_ITEMS_INDEX.query(queryEmbedding, {
         topK: limit * 2, // Get more to filter by user
+        // Explicitly request metadata so we can filter by userId and type
+        returnMetadata: "all",
       });
 
       // Ensure matches array exists
