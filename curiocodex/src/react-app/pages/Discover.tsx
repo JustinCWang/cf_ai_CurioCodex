@@ -23,6 +23,7 @@ interface SearchResult {
 interface SearchResponse {
   hobbies: SearchResult[];
   items: SearchResult[];
+  searchMethod: "semantic" | "text";
 }
 
 function Discover() {
@@ -31,6 +32,7 @@ function Discover() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchMethod, setSearchMethod] = useState<"semantic" | "text" | null>(null);
   const { token, isAuthenticated } = useAuth();
 
   const handleSearch = useCallback(async (e: React.FormEvent) => {
@@ -56,11 +58,13 @@ function Discover() {
 
       const data = await parseResponse<SearchResponse>(response);
       setSearchResults(data);
+      setSearchMethod(data.searchMethod);
     } catch (err) {
       console.error("Error searching:", err);
       const errorMessage = err instanceof Error ? err.message : "Failed to perform search";
       setError(errorMessage);
       setSearchResults(null);
+      setSearchMethod(null);
     } finally {
       setLoading(false);
     }
@@ -124,7 +128,24 @@ function Discover() {
             ) : (
               <div className="search-results">
                 <div className="results-header">
-                  <h2>Search Results</h2>
+                  <div>
+                    <h2>Search Results</h2>
+                    {searchMethod && (
+                      <div className={`search-method-badge ${searchMethod}`}>
+                        {searchMethod === "semantic" ? (
+                          <>
+                            <span className="badge-icon">🧠</span>
+                            <span>Semantic Search (AI-powered)</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="badge-icon">🔤</span>
+                            <span>Text Search (Keyword matching)</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <span className="results-count">
                     Found {totalResults} result{totalResults !== 1 ? 's' : ''}
                   </span>

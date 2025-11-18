@@ -117,14 +117,19 @@
 .results-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 2rem;
   padding-bottom: 1rem;
   border-bottom: 1px solid rgba(138, 43, 226, 0.2);
+  gap: 1rem;
+}
+
+.results-header > div {
+  flex: 1;
 }
 
 .results-header h2 {
-  margin: 0;
+  margin: 0 0 0.75rem;
   color: #9370db;
   font-size: 1.75rem;
 }
@@ -132,6 +137,34 @@
 .results-count {
   color: #b8b8d4;
   font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.search-method-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.search-method-badge.semantic {
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.2) 0%, rgba(147, 112, 219, 0.2) 100%);
+  border: 1px solid rgba(138, 43, 226, 0.4);
+  color: #ba55d3;
+}
+
+.search-method-badge.text {
+  background: rgba(108, 117, 125, 0.2);
+  border: 1px solid rgba(108, 117, 125, 0.4);
+  color: #b8b8d4;
+}
+
+.badge-icon {
+  font-size: 1rem;
 }
 
 .results-section {
@@ -345,7 +378,11 @@
   .results-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.5rem;
+    gap: 1rem;
+  }
+
+  .results-count {
+    align-self: flex-start;
   }
 
   .results-grid {

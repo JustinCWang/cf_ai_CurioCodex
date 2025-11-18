@@ -1091,6 +1091,7 @@ app.post("/api/discover/search", async (c) => {
           tags: i.tags ? JSON.parse(i.tags) as string[] : [],
           type: "item" as const,
         })),
+        searchMethod: "text" as const,
       });
     }
 
@@ -1110,7 +1111,7 @@ app.post("/api/discover/search", async (c) => {
       }).slice(0, limit);
 
       if (userMatches.length === 0) {
-        return c.json({ hobbies: [], items: [] });
+        return c.json({ hobbies: [], items: [], searchMethod: "semantic" as const });
       }
 
       // Separate hobbies and items by type
@@ -1183,6 +1184,7 @@ app.post("/api/discover/search", async (c) => {
       return c.json({
         hobbies: hobbiesWithScores,
         items: itemsWithScores,
+        searchMethod: "semantic" as const,
       });
     } catch (vectorizeError) {
       // Vectorize not available in local dev - fallback to text search
@@ -1219,6 +1221,7 @@ app.post("/api/discover/search", async (c) => {
           tags: i.tags ? JSON.parse(i.tags) as string[] : [],
           type: "item" as const,
         })),
+        searchMethod: "text" as const,
       });
     }
   } catch (error) {
