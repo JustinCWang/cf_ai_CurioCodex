@@ -26,6 +26,8 @@ function Hobbies() {
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editCategory, setEditCategory] = useState<string>("");
+  const [editItemCategories, setEditItemCategories] = useState<string[]>([]);
+  const [editItemCategoryDraft, setEditItemCategoryDraft] = useState<string>("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const { token, isAuthenticated } = useAuth();
 
@@ -53,11 +55,40 @@ function Hobbies() {
     }
   }, [isAuthenticated, fetchHobbies]);
 
-  const handleEdit = (hobby: Hobby) => {
+  const handleEdit = async (hobby: Hobby) => {
     setEditingHobby(hobby);
     setEditName(hobby.name);
     setEditDescription(hobby.description || "");
     setEditCategory(hobby.category || "");
+
+    try {
+      const response = await apiRequest(
+        `/api/hobbies/${hobby.id}/item-categories`,
+        { method: "GET" },
+        token
+      );
+      const data = await parseResponse<{
+        hobbyCategory: string | null;
+        itemCategories: string[];
+        definedCategories?: string[];
+      }>(response);
+      const defined = data.definedCategories && data.definedCategories.length > 0
+        ? data.definedCategories
+        : data.itemCategories;
+      const unique = Array.from(
+        new Set(
+          defined
+            .map((c) => c.trim())
+            .filter((c) => c.length > 0)
+        )
+      );
+      setEditItemCategories(unique);
+      setEditItemCategoryDraft("");
+    } catch (err) {
+      console.error("Error fetching hobby item categories:", err);
+      setEditItemCategories([]);
+      setEditItemCategoryDraft("");
+    }
   };
 
   const handleCancelEdit = () => {
@@ -65,6 +96,8 @@ function Hobbies() {
     setEditName("");
     setEditDescription("");
     setEditCategory("");
+    setEditItemCategories([]);
+    setEditItemCategoryDraft("");
   };
 
   const handleSaveEdit = async () => {
@@ -73,7 +106,12 @@ function Hobbies() {
     }
 
     try {
-      const requestBody: { name: string; description: string | null; category?: string } = {
+      const requestBody: {
+        name: string;
+        description: string | null;
+        category?: string;
+        itemCategories?: string[];
+      } = {
         name: editName.trim(),
         description: editDescription.trim() || null,
       };
@@ -81,6 +119,11 @@ function Hobbies() {
       // Include category if manually selected (empty string means use AI)
       if (editCategory) {
         requestBody.category = editCategory;
+      }
+
+      // Optional: include updated item category definitions for this hobby
+      if (editItemCategories.length > 0) {
+        requestBody.itemCategories = editItemCategories;
       }
 
       const response = await apiRequest(
@@ -257,6 +300,120 @@ function Hobbies() {
                     </select>
                     <p className="form-hint" style={{ fontSize: "0.85rem", color: "#888", marginTop: "0.5rem" }}>
                       Select a category manually or leave as "Auto-categorize" to let AI decide.
+                    </p>
+
+                    <label
+                      htmlFor="edit-item-categories"
+                      style={{ display: "block", marginTop: "0.9rem" }}
+                    >
+                      Item categories for this hobby (optional)
+                    </label>
+                    {editItemCategories.length > 0 && (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: "0.4rem",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        {editItemCategories.map((cat) => (
+                          <span
+                            key={cat}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              padding: "0.15rem 0.5rem",
+                              borderRadius: "999px",
+                              background: "rgba(79, 70, 229, 0.25)",
+                              border: "1px solid rgba(129, 140, 248, 0.7)",
+                              color: "#e0e7ff",
+                              fontSize: "0.8rem",
+                            }}
+                          >
+                            {cat}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditItemCategories((prev) =>
+                                  prev.filter((c) => c !== cat)
+                                )
+                              }
+                              style={{
+                                marginLeft: "0.35rem",
+                                border: "none",
+                                background: "transparent",
+                                color: "#c7d2fe",
+                                cursor: "pointer",
+                                fontSize: "0.8rem",
+                              }}
+                              aria-label={`Remove ${cat}`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                        alignItems: "center",
+                      }}
+                    >
+                      <input
+                        id="edit-item-categories"
+                        type="text"
+                        value={editItemCategoryDraft}
+                        onChange={(e) =>
+                          setEditItemCategoryDraft(e.target.value)
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === ",") {
+                            e.preventDefault();
+                            const value = editItemCategoryDraft
+                              .trim()
+                              .replace(/,$/, "");
+                            if (!value) return;
+                            setEditItemCategories((prev) =>
+                              prev.includes(value) ? prev : [...prev, value]
+                            );
+                            setEditItemCategoryDraft("");
+                          }
+                        }}
+                        className="form-input"
+                        placeholder="Type a category and press Enter…"
+                      />
+                      <button
+                        type="button"
+                        className="camera-button"
+                        style={{ whiteSpace: "nowrap" }}
+                        disabled={
+                          !editItemCategoryDraft.trim()
+                        }
+                        onClick={() => {
+                          const value = editItemCategoryDraft.trim();
+                          if (!value) return;
+                          setEditItemCategories((prev) =>
+                            prev.includes(value) ? prev : [...prev, value]
+                          );
+                          setEditItemCategoryDraft("");
+                        }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <p
+                      className="form-hint"
+                      style={{
+                        fontSize: "0.85rem",
+                        color: "#888",
+                        marginTop: "0.5rem",
+                      }}
+                    >
+                      Define or update custom item categories for this hobby. Separate multiple categories with commas.
+                      These will be used by AI when auto-categorizing items here, even before any items exist.
                     </p>
                   </div>
                   <div className="modal-actions">

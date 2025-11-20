@@ -21,3 +21,5 @@ It seems like my vector database is missing metadata and failing the query, can 
 Can you pull all the prompts I am currently using and methods that call LLMS? I want to refine them and check the models. For each model, explain their specs from the Cloudflare docs. 
 
 Can you check my backend implementation for custom Item categories for any edge cases that I should be aware of or logic errors? Then can you build a basic frontend UI for me to debug and test the custom categorization for items works?
+
+I added a migration schema to add hobby_item_categories so we can allow users to create multiple custom item categories for a hobby before adding anything. Can you check if the schema integrates with our current one and help me update the APIs to account for the new schema and a basic frontend UI for testing?

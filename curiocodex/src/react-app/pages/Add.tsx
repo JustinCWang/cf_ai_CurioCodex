@@ -38,6 +38,8 @@ function Add() {
   const [manualCategory, setManualCategory] = useState<string>("");
   const [itemCategories, setItemCategories] = useState<string[]>([]);
   const [hobbyCategory, setHobbyCategory] = useState<string | null>(null);
+  const [hobbyItemCategories, setHobbyItemCategories] = useState<string[]>([]);
+  const [hobbyItemCategoryDraft, setHobbyItemCategoryDraft] = useState<string>("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
@@ -303,7 +305,12 @@ function Add() {
     try {
       if (type === "hobby") {
         // Create hobby
-        const requestBody: { name: string; description: string | null; category?: string } = {
+        const requestBody: {
+          name: string;
+          description: string | null;
+          category?: string;
+          itemCategories?: string[];
+        } = {
           name: name.trim(),
           description: description.trim() || null,
         };
@@ -311,6 +318,11 @@ function Add() {
         // Include category if manually selected
         if (manualCategory) {
           requestBody.category = manualCategory;
+        }
+
+        // Optional: include any initial item categories for this hobby
+        if (hobbyItemCategories.length > 0) {
+          requestBody.itemCategories = hobbyItemCategories;
         }
 
         const response = await apiRequest(
@@ -329,6 +341,8 @@ function Add() {
           setName("");
           setDescription("");
           setManualCategory("");
+          setHobbyItemCategories([]);
+          setHobbyItemCategoryDraft("");
           setShowAdvanced(false);
           setImageFile(null);
           setImagePreview(null);
@@ -441,6 +455,8 @@ function Add() {
                 setManualCategory("");
                 setItemCategories([]);
                 setHobbyCategory(null);
+                setHobbyItemCategories([]);
+                setHobbyItemCategoryDraft("");
               }}
             >
               ✨ Hobby
@@ -641,6 +657,112 @@ function Add() {
                         </select>
                         <p className="form-hint">
                           Select a high-level hobby category manually, or leave on auto to let AI pick one.
+                        </p>
+
+                        <label
+                          htmlFor="hobby-item-categories"
+                          style={{ display: "block", marginTop: "0.9rem" }}
+                        >
+                          Item categories for this hobby (optional)
+                        </label>
+                        {hobbyItemCategories.length > 0 && (
+                          <div
+                            style={{
+                              display: "flex",
+                              flexWrap: "wrap",
+                              gap: "0.4rem",
+                              marginBottom: "0.5rem",
+                            }}
+                          >
+                            {hobbyItemCategories.map((cat) => (
+                              <span
+                                key={cat}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  padding: "0.15rem 0.5rem",
+                                  borderRadius: "999px",
+                                  background: "rgba(79, 70, 229, 0.25)",
+                                  border: "1px solid rgba(129, 140, 248, 0.7)",
+                                  color: "#e0e7ff",
+                                  fontSize: "0.8rem",
+                                }}
+                              >
+                                {cat}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setHobbyItemCategories((prev) =>
+                                      prev.filter((c) => c !== cat)
+                                    )
+                                  }
+                                  style={{
+                                    marginLeft: "0.35rem",
+                                    border: "none",
+                                    background: "transparent",
+                                    color: "#c7d2fe",
+                                    cursor: "pointer",
+                                    fontSize: "0.8rem",
+                                  }}
+                                  aria-label={`Remove ${cat}`}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.5rem",
+                            alignItems: "center",
+                          }}
+                        >
+                          <input
+                            id="hobby-item-categories"
+                            type="text"
+                            value={hobbyItemCategoryDraft}
+                            onChange={(e) =>
+                              setHobbyItemCategoryDraft(e.target.value)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === ",") {
+                                e.preventDefault();
+                                const value = hobbyItemCategoryDraft
+                                  .trim()
+                                  .replace(/,$/, "");
+                                if (!value) return;
+                                setHobbyItemCategories((prev) =>
+                                  prev.includes(value) ? prev : [...prev, value]
+                                );
+                                setHobbyItemCategoryDraft("");
+                              }
+                            }}
+                            disabled={loading}
+                            className="form-input"
+                            placeholder="Type a category and press Enter…"
+                          />
+                          <button
+                            type="button"
+                            className="camera-button"
+                            style={{ whiteSpace: "nowrap" }}
+                            disabled={loading || !hobbyItemCategoryDraft.trim()}
+                            onClick={() => {
+                              const value = hobbyItemCategoryDraft.trim();
+                              if (!value) return;
+                              setHobbyItemCategories((prev) =>
+                                prev.includes(value) ? prev : [...prev, value]
+                              );
+                              setHobbyItemCategoryDraft("");
+                            }}
+                          >
+                            Add
+                          </button>
+                        </div>
+                        <p className="form-hint">
+                          Define custom item categories ahead of time. These will be used by AI when auto-categorizing
+                          new items in this hobby.
                         </p>
                       </>
                     ) : (

@@ -261,6 +261,11 @@ app.post("/api/hobbies", async (c) => {
   const name = body.name as string | undefined;
   let description = body.description as string | undefined;
   const providedCategory = body.category as string | undefined;
+  const providedItemCategories = Array.isArray(body.itemCategories)
+    ? (body.itemCategories as unknown[])
+        .map((c) => (typeof c === "string" ? c.trim() : ""))
+        .filter((c) => c.length > 0)
+    : [];
 
   if (!name) {
     return c.json({ error: "Name is required" }, 400);
@@ -307,7 +312,25 @@ app.post("/api/hobbies", async (c) => {
       )
       .run();
 
-    // 5. Store embedding in Vectorize (optional in local dev)
+    // 5. If the user provided any initial item categories for this hobby,
+    //    store them in the hobby_item_categories table so they can be reused
+    //    for item categorization even before any items exist.
+    if (providedItemCategories.length > 0) {
+      const uniqueNames = Array.from(
+        new Set(providedItemCategories.map((c) => c.trim()).filter((c) => c.length > 0))
+      );
+
+      for (const name of uniqueNames) {
+        const id = crypto.randomUUID();
+        await c.env.DB.prepare(
+          "INSERT OR IGNORE INTO hobby_item_categories (id, hobby_id, name) VALUES (?, ?, ?)"
+        )
+          .bind(id, hobbyId, name)
+          .run();
+      }
+    }
+
+    // 6. Store embedding in Vectorize (optional in local dev)
     if (c.env.HOBBY_ITEMS_INDEX) {
       try {
         await c.env.HOBBY_ITEMS_INDEX.insert([
@@ -452,7 +475,15 @@ app.get("/api/hobbies/:id/similar", async (c) => {
 app.put("/api/hobbies/:id", async (c) => {
   const user = c.get("user");
   const hobbyId = c.req.param("id");
-  const { name, description, category: providedCategory } = await c.req.json();
+  const body = await c.req.json();
+  const name = body.name as string | undefined;
+  const description = body.description as string | null | undefined;
+  const providedCategory = body.category as string | undefined;
+  const providedItemCategories = Array.isArray(body.itemCategories)
+    ? (body.itemCategories as unknown[])
+        .map((c) => (typeof c === "string" ? c.trim() : ""))
+        .filter((c) => c.length > 0)
+    : [];
 
   if (!name) {
     return c.json({ error: "Name is required" }, 400);
@@ -493,6 +524,31 @@ app.put("/api/hobbies/:id", async (c) => {
         user.userId
       )
       .run();
+
+    // If the user provided an updated list of item category definitions,
+    // replace this hobby's definitions with the new list.
+    if (providedItemCategories.length > 0) {
+      const uniqueNames = Array.from(
+        new Set(providedItemCategories.map((c) => c.trim()).filter((c) => c.length > 0))
+      );
+
+      // Delete old definitions for this hobby
+      await c.env.DB.prepare(
+        "DELETE FROM hobby_item_categories WHERE hobby_id = ?"
+      )
+        .bind(hobbyId)
+        .run();
+
+      // Insert new definitions
+      for (const name of uniqueNames) {
+        const id = crypto.randomUUID();
+        await c.env.DB.prepare(
+          "INSERT OR IGNORE INTO hobby_item_categories (id, hobby_id, name) VALUES (?, ?, ?)"
+        )
+          .bind(id, hobbyId, name)
+          .run();
+      }
+    }
 
     // Update embedding in Vectorize (optional in local dev)
     if (c.env.HOBBY_ITEMS_INDEX) {
@@ -733,8 +789,9 @@ app.post("/api/hobbies/:hobbyId/items", async (c) => {
     const hobbyCategory = hobby.category;
 
     // Look at existing item categories for this hobby so AI can choose
-    // between them when auto-categorizing.
-    const existingCategories = await c.env.DB.prepare(
+    // between them when auto-categorizing. Combine categories that come
+    // from existing items with user-defined hobby item categories.
+    const itemCategoryRows = await c.env.DB.prepare(
       `SELECT DISTINCT category as name
        FROM items
        WHERE hobby_id = ? AND category IS NOT NULL AND TRIM(category) != ''
@@ -743,7 +800,22 @@ app.post("/api/hobbies/:hobbyId/items", async (c) => {
       .bind(hobbyId)
       .all<{ name: string }>();
 
-    const customCategories = existingCategories.results.map((row) => row.name);
+    const definedCategoryRows = await c.env.DB.prepare(
+      `SELECT name
+       FROM hobby_item_categories
+       WHERE hobby_id = ?
+       ORDER BY name COLLATE NOCASE`
+    )
+      .bind(hobbyId)
+      .all<{ name: string }>();
+
+    const customCategories = Array.from(
+      new Set(
+        [...itemCategoryRows.results, ...definedCategoryRows.results].map((row) =>
+          row.name.trim()
+        )
+      )
+    ).filter((name) => name.length > 0);
 
     // Generate embedding
     const fullText = `${name} ${description || ""}`.trim();
@@ -871,6 +943,9 @@ app.get("/api/hobbies/:hobbyId/items", async (c) => {
 /**
  * GET /api/hobbies/:hobbyId/item-categories
  * Get the hobby's own category and all distinct item categories for that hobby.
+ * This includes:
+ * - Explicit hobby item category definitions (hobby_item_categories)
+ * - Item categories actually used on items
  * Used by the frontend so users can reuse or type custom item categories.
  */
 app.get("/api/hobbies/:hobbyId/item-categories", async (c) => {
@@ -888,7 +963,7 @@ app.get("/api/hobbies/:hobbyId/item-categories", async (c) => {
       return c.json({ error: "Hobby not found" }, 404);
     }
 
-    const categories = await c.env.DB.prepare(
+    const itemCategoryRows = await c.env.DB.prepare(
       `SELECT DISTINCT category as name
        FROM items
        WHERE hobby_id = ? AND category IS NOT NULL AND TRIM(category) != ''
@@ -897,11 +972,29 @@ app.get("/api/hobbies/:hobbyId/item-categories", async (c) => {
       .bind(hobbyId)
       .all<{ name: string }>();
 
-    const itemCategories = categories.results.map((row) => row.name);
+    const definedCategoryRows = await c.env.DB.prepare(
+      `SELECT name
+       FROM hobby_item_categories
+       WHERE hobby_id = ?
+       ORDER BY name COLLATE NOCASE`
+    )
+      .bind(hobbyId)
+      .all<{ name: string }>();
+
+    const definedCategories = definedCategoryRows.results.map((row) => row.name);
+
+    const allCategories = Array.from(
+      new Set(
+        [...itemCategoryRows.results, ...definedCategoryRows.results].map((row) =>
+          row.name.trim()
+        )
+      )
+    ).filter((name) => name.length > 0);
 
     return c.json({
       hobbyCategory: hobby.category,
-      itemCategories,
+      itemCategories: allCategories,
+      definedCategories,
     });
   } catch (error) {
     console.error("Error fetching item categories for hobby:", error);
@@ -953,9 +1046,10 @@ app.put("/api/hobbies/:hobbyId/items/:id", async (c) => {
     const embedding = await generateEmbedding(fullText, c.env.AI);
 
     // Use provided category or re-categorize with AI, taking into account
-    // existing per-hobby item categories so items can be auto-assigned
+    // existing per-hobby item categories (from both items and explicit
+    // hobby item category definitions) so items can be auto-assigned
     // into your custom categories over time.
-    const existingCategories = await c.env.DB.prepare(
+    const itemCategoryRows = await c.env.DB.prepare(
       `SELECT DISTINCT category as name
        FROM items
        WHERE hobby_id = ? AND category IS NOT NULL AND TRIM(category) != ''
@@ -964,7 +1058,22 @@ app.put("/api/hobbies/:hobbyId/items/:id", async (c) => {
       .bind(hobbyId)
       .all<{ name: string }>();
 
-    const customCategories = existingCategories.results.map((row) => row.name);
+    const definedCategoryRows = await c.env.DB.prepare(
+      `SELECT name
+       FROM hobby_item_categories
+       WHERE hobby_id = ?
+       ORDER BY name COLLATE NOCASE`
+    )
+      .bind(hobbyId)
+      .all<{ name: string }>();
+
+    const customCategories = Array.from(
+      new Set(
+        [...itemCategoryRows.results, ...definedCategoryRows.results].map((row) =>
+          row.name.trim()
+        )
+      )
+    ).filter((name) => name.length > 0);
 
     let category: string;
 
