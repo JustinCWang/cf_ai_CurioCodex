@@ -1501,86 +1501,144 @@ app.delete("/api/hobbies/:hobbyId/items/:id", async (c) => {
 // ============================================================================
 
 /**
- * GET /api/discover/recommendations
- * Get personalized hobby/item recommendations based on user's interests.
+ * POST /api/discover/recommendations
+ * Get personalized item recommendations based on the user's interests
+ * and an optional natural-language query.
+ *
+ * The recommendations are drawn from other users' items so that:
+ * - suggested items represent things that actually exist
+ * - quality improves as more users add items
  */
-app.get("/api/discover/recommendations", async (c) => {
+app.post("/api/discover/recommendations", async (c) => {
   const user = c.get("user");
+  const { query, limit = 12 } = await c.req.json<{
+    query?: string;
+    limit?: number;
+  }>();
 
   try {
-    // Get all user's hobbies
+    // Try to get recommendations using Vectorize (may not be available in local dev)
+    if (!c.env.HOBBY_ITEMS_INDEX) {
+      return c.json({ recommendations: [], searchMethod: "text" as const });
+    }
+
+    // Get all user's hobbies (for profile embedding)
     const userHobbies = await c.env.DB.prepare(
       "SELECT id FROM hobbies WHERE user_id = ?"
     )
       .bind(user.userId)
       .all<{ id: string }>();
 
-    if (userHobbies.results.length === 0) {
-      return c.json({ recommendations: [] });
-    }
+    const hobbyIds = userHobbies.results.map((h) => h.id);
 
-    // Try to get recommendations using Vectorize (may not be available in local dev)
-    if (!c.env.HOBBY_ITEMS_INDEX) {
-      return c.json({ recommendations: [] });
-    }
+    let searchEmbedding: number[] | null = null;
 
-    try {
-      // Get embeddings for all user hobbies
-      const hobbyIds = userHobbies.results.map((h) => h.id);
+    // 1. If user has hobbies, build a profile embedding
+    if (hobbyIds.length > 0) {
       const embeddings = await c.env.HOBBY_ITEMS_INDEX.getByIds(hobbyIds);
 
-      if (embeddings.length === 0) {
-        return c.json({ recommendations: [] });
+      if (embeddings.length > 0) {
+        const embeddingVectors = embeddings.map((vec) => Array.from(vec.values));
+        const profileEmbedding = averageEmbeddings(embeddingVectors);
+
+        // Blend profile with query if present
+        if (query && query.trim()) {
+          const queryEmbedding = await generateEmbedding(query.trim(), c.env.AI);
+          const alpha = 0.5; // weight for profile vs query
+          searchEmbedding = profileEmbedding.map(
+            (v, i) => alpha * v + (1 - alpha) * queryEmbedding[i]
+          );
+        } else {
+          searchEmbedding = profileEmbedding;
+        }
       }
+    }
 
-      // Calculate average embedding to represent user's interest profile
-      // Convert VectorFloatArray to number[] for averaging
-      const embeddingVectors = embeddings.map((vec) => Array.from(vec.values));
-      const avgEmbedding = averageEmbeddings(embeddingVectors);
+    // 2. If we still don't have an embedding but there is a query, just use the query
+    if (!searchEmbedding && query && query.trim()) {
+      searchEmbedding = await generateEmbedding(query.trim(), c.env.AI);
+    }
 
-      // Find similar items across all users (for discovery)
-      // Note: Vectorize filter doesn't support $ne, so we'll filter in code
-      const matches = await c.env.HOBBY_ITEMS_INDEX.query(avgEmbedding, {
-        topK: 20, // Get more to filter out user's own items
-        // Explicitly request metadata so we can filter by userId
-        returnMetadata: "all",
-      });
+    // 3. If we have neither hobbies nor query, we have nothing to go on
+    if (!searchEmbedding) {
+      return c.json({ recommendations: [], searchMethod: "semantic" as const });
+    }
 
-      // Filter out user's own items and get top 10
-      const recommendations = matches.matches
-        .filter((m) => {
-          const metadata = m.metadata as { userId?: string };
-          return metadata.userId !== user.userId;
-        })
-        .slice(0, 10);
+    // 4. Query Vectorize across all items/hobbies
+    const matches = await c.env.HOBBY_ITEMS_INDEX.query(searchEmbedding, {
+      topK: limit * 3, // get more to filter and sort
+      returnMetadata: "all",
+    });
 
-      if (recommendations.length === 0) {
-        return c.json({ recommendations: [] });
+    if (!matches || !matches.matches || matches.matches.length === 0) {
+      return c.json({ recommendations: [], searchMethod: "semantic" as const });
+    }
+
+    // 5. Filter down to other users' items only
+    const candidateMatches = matches.matches.filter((m) => {
+      if (!m || !m.metadata) return false;
+      const metadata = m.metadata as { userId?: string; type?: string };
+      if (!metadata.userId) return false;
+      // Only recommend items, not hobbies
+      if (metadata.type !== "item") return false;
+      // Only recommend from other users to encourage discovery
+      return metadata.userId !== user.userId;
+    });
+
+    if (candidateMatches.length === 0) {
+      return c.json({ recommendations: [], searchMethod: "semantic" as const });
+    }
+
+    // 6. Take top N unique item IDs
+    const seenIds = new Set<string>();
+    const itemIds: string[] = [];
+    for (const m of candidateMatches) {
+      if (!seenIds.has(m.id)) {
+        seenIds.add(m.id);
+        itemIds.push(m.id);
       }
+      if (itemIds.length >= limit) break;
+    }
 
-      // Get metadata from D1
-      const recIds = recommendations.map((r) => r.id);
-      const placeholders = recIds.map(() => "?").join(",");
-      const recData = await c.env.DB.prepare(
-        `SELECT id, name, description, category, tags FROM hobbies 
-         WHERE id IN (${placeholders})`
-      )
-        .bind(...recIds)
-        .all<HobbyRow>();
+    if (itemIds.length === 0) {
+      return c.json({ recommendations: [], searchMethod: "semantic" as const });
+    }
 
-      // Parse tags and add similarity scores
-      const results = recData.results.map((item, index) => ({
+    // 7. Hydrate items from D1
+    const placeholders = itemIds.map(() => "?").join(",");
+    const itemRows = await c.env.DB.prepare(
+      `SELECT i.id, i.name, i.description, i.category, i.tags, i.created_at, i.hobby_id
+       FROM items i
+       INNER JOIN hobbies h ON i.hobby_id = h.id
+       WHERE i.id IN (${placeholders})`
+    )
+      .bind(...itemIds)
+      .all<ItemRow & { hobby_id: string }>();
+
+    if (itemRows.results.length === 0) {
+      return c.json({ recommendations: [], searchMethod: "semantic" as const });
+    }
+
+    // 8. Attach similarity scores
+    const scoreMap = new Map<string, number>();
+    candidateMatches.forEach((m) => {
+      scoreMap.set(m.id, m.score);
+    });
+
+    const recommendations = itemRows.results
+      .map((item) => ({
         ...item,
         tags: item.tags ? JSON.parse(item.tags) as string[] : [],
-        similarity: recommendations[index].score,
-      }));
+        type: "item" as const,
+        similarity: scoreMap.get(item.id) ?? 0,
+      }))
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, limit);
 
-      return c.json({ recommendations: results });
-    } catch (vectorizeError) {
-      // Vectorize not available in local dev - return empty results
-      console.warn("Vectorize not available (local dev?):", vectorizeError);
-      return c.json({ recommendations: [] });
-    }
+    return c.json({
+      recommendations,
+      searchMethod: "semantic" as const,
+    });
   } catch (error) {
     console.error("Error getting recommendations:", error);
     return c.json({ error: "Failed to get recommendations" }, 500);
