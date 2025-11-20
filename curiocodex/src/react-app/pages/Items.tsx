@@ -48,6 +48,7 @@ function Items() {
   const [testItemCategories, setTestItemCategories] = useState<string[]>([]);
   const [testLoading, setTestLoading] = useState(false);
   const [testError, setTestError] = useState("");
+  const [viewMode, setViewMode] = useState<"card" | "list" | "icon">("card");
   const { token, isAuthenticated } = useAuth();
 
   const fetchAllItems = useCallback(async () => {
@@ -456,6 +457,57 @@ function Items() {
 
         {error && <div className="error-message">{error}</div>}
 
+        <div className="items-toolbar">
+          <div className="items-toolbar-summary">
+            <span className="items-total">
+              {totalItems} item{totalItems !== 1 ? "s" : ""} across{" "}
+              {itemsByHobby.length} hobbie{itemsByHobby.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <div
+            className="items-view-toggle"
+            role="radiogroup"
+            aria-label="Change item layout"
+          >
+            <button
+              type="button"
+              className={`view-toggle-button ${
+                viewMode === "card" ? "active" : ""
+              }`}
+              onClick={() => setViewMode("card")}
+              role="radio"
+              aria-checked={viewMode === "card"}
+            >
+              <span className="view-toggle-icon">🧊</span>
+              <span className="view-toggle-label">Column</span>
+            </button>
+            <button
+              type="button"
+              className={`view-toggle-button ${
+                viewMode === "list" ? "active" : ""
+              }`}
+              onClick={() => setViewMode("list")}
+              role="radio"
+              aria-checked={viewMode === "list"}
+            >
+              <span className="view-toggle-icon">📄</span>
+              <span className="view-toggle-label">List</span>
+            </button>
+            <button
+              type="button"
+              className={`view-toggle-button ${
+                viewMode === "icon" ? "active" : ""
+              }`}
+              onClick={() => setViewMode("icon")}
+              role="radio"
+              aria-checked={viewMode === "icon"}
+            >
+              <span className="view-toggle-icon">🔳</span>
+              <span className="view-toggle-label">Icon</span>
+            </button>
+          </div>
+        </div>
+
         {totalItems === 0 ? (
           <div className="empty-state">
             <p className="empty-message">📦 No items yet! 📦</p>
@@ -476,63 +528,185 @@ function Items() {
                   </h2>
                   <span className="item-count">{group.items.length} item{group.items.length !== 1 ? 's' : ''}</span>
                 </div>
-                <div className="items-grid">
-                  {group.items.map((item) => (
-                    <div key={item.id} className="item-card">
-                      <div className="card-glow"></div>
-                      {item.image_url && (
-                        <div className="item-image-container">
-                          <img 
-                            src={item.image_url} 
-                            alt={item.name} 
-                            className="item-image"
-                            onError={(e) => {
-                              // Hide image on error
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
-                          />
-                        </div>
-                      )}
-                      <h3>{item.name}</h3>
-                      {item.description && (
-                        <p className="card-description">{item.description}</p>
-                      )}
-                      {item.category && (
-                        <div className="card-category">
-                          <span className="category-label">Category:</span>
-                          <span className="category-value">{item.category}</span>
-                        </div>
-                      )}
-                      {item.tags && item.tags.length > 0 && (
-                        <div className="card-tags">
-                          {item.tags.map((tag, index) => (
-                            <span key={index} className="tag">
-                              #{tag}
+                {viewMode === "card" && (
+                  <div className="items-grid items-grid-card">
+                    {group.items.map((item) => (
+                      <div key={item.id} className="item-card">
+                        <div className="card-glow"></div>
+                        {item.image_url && (
+                          <div className="item-image-container">
+                            <img
+                              src={item.image_url}
+                              alt={item.name}
+                              className="item-image"
+                              onError={(e) => {
+                                // Hide image on error
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                              }}
+                            />
+                          </div>
+                        )}
+                        <h3>{item.name}</h3>
+                        {item.description && (
+                          <p className="card-description">{item.description}</p>
+                        )}
+                        {item.category && (
+                          <div className="card-category">
+                            <span className="category-label">Category:</span>
+                            <span className="category-value">
+                              {item.category}
                             </span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="card-footer">
-                        <div className="action-buttons">
-                          <button
-                            className="edit-button"
-                            onClick={() => handleEdit(item, group.hobby.id)}
-                            title="Edit item"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            className="delete-button"
-                            onClick={() => setDeleteConfirm({ itemId: item.id, hobbyId: group.hobby.id })}
-                            title="Delete item"
-                          >
-                            🗑️
-                          </button>
+                          </div>
+                        )}
+                        {item.tags && item.tags.length > 0 && (
+                          <div className="card-tags">
+                            {item.tags.map((tag, index) => (
+                              <span key={index} className="tag">
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="card-footer">
+                          <div className="action-buttons">
+                            <button
+                              className="edit-button"
+                              onClick={() => handleEdit(item, group.hobby.id)}
+                              title="Edit item"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className="delete-button"
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  itemId: item.id,
+                                  hobbyId: group.hobby.id,
+                                })
+                              }
+                              title="Delete item"
+                            >
+                              🗑️
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
+
+                {viewMode === "list" && (
+                  <div className="items-list" aria-label="Items list view">
+                    {group.items.map((item) => (
+                      <div key={item.id} className="item-row">
+                        {item.image_url && (
+                          <div className="item-row-image-wrapper">
+                            <img
+                              src={item.image_url}
+                              alt={item.name}
+                              className="item-row-image"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                              }}
+                            />
+                          </div>
+                        )}
+                        <div className="item-row-main">
+                          <div className="item-row-primary">
+                            <span className="item-row-name">{item.name}</span>
+                            {item.category && (
+                              <span className="item-row-category">
+                                {item.category}
+                              </span>
+                            )}
+                          </div>
+                          {item.description && (
+                            <div className="item-row-description">
+                              {item.description}
+                            </div>
+                          )}
+                        </div>
+                        <div className="item-row-meta">
+                          {item.tags && item.tags.length > 0 && (
+                            <div className="item-row-tags">
+                              {item.tags.slice(0, 3).map((tag, index) => (
+                                <span key={index} className="item-row-tag">
+                                  #{tag}
+                                </span>
+                              ))}
+                              {item.tags.length > 3 && (
+                                <span className="item-row-tag-more">
+                                  +{item.tags.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <div className="item-row-actions">
+                            <button
+                              className="edit-button"
+                              onClick={() => handleEdit(item, group.hobby.id)}
+                              title="Edit item"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              className="delete-button"
+                              onClick={() =>
+                                setDeleteConfirm({
+                                  itemId: item.id,
+                                  hobbyId: group.hobby.id,
+                                })
+                              }
+                              title="Delete item"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {viewMode === "icon" && (
+                  <div className="items-grid items-grid-icon">
+                    {group.items.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className="item-icon-card"
+                        onClick={() => handleEdit(item, group.hobby.id)}
+                        title={`Edit ${item.name}`}
+                      >
+                        <div className="item-icon-thumb">
+                          {item.image_url ? (
+                            <img
+                              src={item.image_url}
+                              alt={item.name}
+                              className="item-icon-image"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                              }}
+                            />
+                          ) : (
+                            <span className="item-icon-fallback">
+                              {item.name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <span className="item-icon-name">{item.name}</span>
+                        {item.category && (
+                          <span className="item-icon-category">
+                            {item.category}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

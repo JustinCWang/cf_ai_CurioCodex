@@ -27,3 +27,5 @@ I added a migration schema to add hobby_item_categories so we can allow users to
 How can we parse CSV files using Hono? I want to implement bulk item adding where you can either import your csv files (for migration) and our app will parse the csv file and display it's contents for the user to review and then bulk add (just like normally adding). I also want to implement custom parsing via textbox where the user just pastes in a bunch of text. Ensure that we don't break the existing item adding functionality, but instead just add additional cases for if we wanted to bulk add. 
 
 I want to use Vectorize to be able to add recommendations that a user can use natural language to "discover" new things. As we build up users and more items are in the vectordb, I want users to be able to discover items that aren't in their collection, but still very similar to what they searched for. Can you explain how this would work using Cloudflare's vectorize and create a basic frontend ui to test this?
+
+Can generate me some basic CSS styling and UI for the basic Item display settings I made? We have card, list, and icon as the choices that the user can select. 
