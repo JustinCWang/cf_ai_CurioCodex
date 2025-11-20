@@ -21,6 +21,7 @@ import {
   analyzeImage,
   generateDescriptionFromName,
 } from "./ai";
+import type { Context } from "hono";
 
 interface Env {
   DB: D1Database;
@@ -55,6 +56,151 @@ interface ItemRow {
   tags: string | null;
   image_url: string | null;
   created_at: number;
+}
+
+type AppContext = Context<{ Bindings: Env; Variables: Variables }>;
+
+interface CreateItemCoreOptions {
+  itemId: string;
+  hobbyId: string;
+  userId: string;
+  name: string;
+  description?: string | null;
+  providedCategory?: string | null;
+  hobbyCategory: string | null;
+  customCategories: string[];
+  imageUrl: string | null;
+}
+
+interface CreatedItemPayload {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  tags: string[];
+  image_url: string | null;
+}
+
+async function createItemCore(
+  c: AppContext,
+  options: CreateItemCoreOptions
+): Promise<CreatedItemPayload> {
+  const {
+    itemId,
+    hobbyId,
+    userId,
+    name: rawName,
+    description: rawDescription,
+    providedCategory,
+    hobbyCategory,
+    customCategories,
+    imageUrl,
+  } = options;
+
+  let name = rawName;
+  let description = rawDescription;
+
+  // Ensure name is always defined and trimmed
+  name = (name || "").trim();
+  if (!name) {
+    name = "Unnamed Item";
+  }
+
+  // If we only have a name (no description and no image-based analysis), try to
+  // generate a brief description from the name so the item isn't empty.
+  if (!description || !String(description).trim()) {
+    try {
+      const generated = await generateDescriptionFromName(name, c.env.AI);
+      if (generated && generated.trim()) {
+        description = generated;
+      }
+    } catch (descError) {
+      console.error("Error generating description from name:", descError);
+      // Safe to continue without a description
+    }
+  }
+
+  // Generate embedding
+  const fullText = `${name} ${description || ""}`.trim();
+  const embedding = await generateEmbedding(fullText, c.env.AI);
+
+  // Decide on final item category:
+  // 1. If the user (or image analysis / bulk input) provided a category, use it as-is.
+  // 2. Else, if we have any existing item categories for this hobby,
+  //    ask AI to choose between them (and the hobby category).
+  // 3. Else, if the hobby already has a category, inherit it by default.
+  // 4. Finally, fall back to the generic hobby-level categorizer.
+  let category: string;
+
+  if (providedCategory && providedCategory.trim().length > 0) {
+    category = providedCategory.trim();
+  } else if (customCategories.length > 0) {
+    category = await categorizeItemWithCustomCategories(
+      name,
+      description || null,
+      c.env.AI,
+      {
+        hobbyCategory,
+        customCategories,
+      }
+    );
+  } else if (hobbyCategory && hobbyCategory.trim().length > 0) {
+    category = hobbyCategory.trim();
+  } else {
+    category = await categorizeItem(name, description || null, c.env.AI);
+  }
+
+  // Extract tags
+  const tags = await extractTags(name, description || null, c.env.AI);
+
+  // Create item in D1
+  await c.env.DB.prepare(
+    `INSERT INTO items (id, hobby_id, name, description, category, tags, embedding_id, image_url) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(
+      itemId,
+      hobbyId,
+      name.trim(),
+      description ? description.trim() : null,
+      category,
+      JSON.stringify(tags),
+      itemId,
+      imageUrl
+    )
+    .run();
+
+  // Store embedding in Vectorize (optional in local dev)
+  if (c.env.HOBBY_ITEMS_INDEX) {
+    try {
+      await c.env.HOBBY_ITEMS_INDEX.insert([
+        {
+          id: itemId,
+          values: embedding,
+          metadata: {
+            type: "item",
+            userId,
+            hobbyId,
+            name,
+            category,
+          },
+        },
+      ]);
+    } catch (error) {
+      // Vectorize may not be available in local development (Windows filename issues)
+      // Continue without Vectorize - app still works for basic CRUD
+      console.warn("Vectorize not available (local dev?):", error);
+    }
+  }
+
+  return {
+    id: itemId,
+    name: name.trim(),
+    description: description ? description.trim() : null,
+    category,
+    tags,
+    image_url: imageUrl,
+  };
 }
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -755,23 +901,93 @@ app.post("/api/hobbies/:hobbyId/items", async (c) => {
     }
   }
 
-  // Ensure name is always defined before proceeding
-  if (!name || !name.trim()) {
-    name = "Unnamed Item";
-  }
+  try {
+    // Verify hobby belongs to user and get its category
+    const hobby = await c.env.DB.prepare(
+      "SELECT id, user_id, category FROM hobbies WHERE id = ?"
+    )
+      .bind(hobbyId)
+      .first<{ id: string; user_id: string; category: string | null }>();
 
-  // If we only have a name (no description and no image-based analysis), try to
-  // generate a brief description from the name so the item isn't empty.
-  if (!description || !description.trim()) {
-    try {
-      const generated = await generateDescriptionFromName(name, c.env.AI);
-      if (generated && generated.trim()) {
-        description = generated;
-      }
-    } catch (descError) {
-      console.error("Error generating description from name:", descError);
-      // Safe to continue without a description
+    if (!hobby || hobby.user_id !== user.userId) {
+      return c.json({ error: "Hobby not found" }, 404);
     }
+
+    const hobbyCategory = hobby.category;
+
+    // Look at existing item categories for this hobby so AI can choose
+    // between them when auto-categorizing. Combine categories that come
+    // from existing items with user-defined hobby item categories.
+    const itemCategoryRows = await c.env.DB.prepare(
+      `SELECT DISTINCT category as name
+       FROM items
+       WHERE hobby_id = ? AND category IS NOT NULL AND TRIM(category) != ''
+       ORDER BY category COLLATE NOCASE`
+    )
+      .bind(hobbyId)
+      .all<{ name: string }>();
+
+    const definedCategoryRows = await c.env.DB.prepare(
+      `SELECT name
+       FROM hobby_item_categories
+       WHERE hobby_id = ?
+       ORDER BY name COLLATE NOCASE`
+    )
+      .bind(hobbyId)
+      .all<{ name: string }>();
+
+    const customCategories = Array.from(
+      new Set(
+        [...itemCategoryRows.results, ...definedCategoryRows.results].map((row) =>
+          row.name.trim()
+        )
+      )
+    ).filter((name) => name.length > 0);
+
+    const created = await createItemCore(c, {
+      itemId,
+      hobbyId,
+      userId: user.userId,
+      name: name || "Unnamed Item",
+      description: description || null,
+      providedCategory,
+      hobbyCategory,
+      customCategories,
+      imageUrl,
+    });
+
+    return c.json({
+      success: true,
+      item: created,
+    });
+  } catch (error) {
+    console.error("Error creating item:", error);
+    return c.json({ error: "Failed to create item" }, 500);
+  }
+});
+
+/**
+ * POST /api/hobbies/:hobbyId/items/bulk
+ * Create multiple items within a hobby in one request.
+ * Each item still goes through the same AI-powered description, categorization,
+ * tagging, and vectorization logic as the single-item endpoint.
+ */
+app.post("/api/hobbies/:hobbyId/items/bulk", async (c) => {
+  const user = c.get("user");
+  const hobbyId = c.req.param("hobbyId");
+
+  const body = await c.req.json<{
+    items?: {
+      name?: string;
+      description?: string | null;
+      category?: string | null;
+    }[];
+  }>();
+
+  const items = Array.isArray(body.items) ? body.items : [];
+
+  if (items.length === 0) {
+    return c.json({ error: "No items provided" }, 400);
   }
 
   try {
@@ -817,93 +1033,58 @@ app.post("/api/hobbies/:hobbyId/items", async (c) => {
       )
     ).filter((name) => name.length > 0);
 
-    // Generate embedding
-    const fullText = `${name} ${description || ""}`.trim();
-    const embedding = await generateEmbedding(fullText, c.env.AI);
+    const created: CreatedItemPayload[] = [];
+    const skipped: { index: number; reason: string }[] = [];
 
-    // Decide on final item category:
-    // 1. If the user (or image analysis) provided a category, use it as-is.
-    // 2. Else, if we have any existing item categories for this hobby,
-    //    ask AI to choose between them (and the hobby category).
-    // 3. Else, if the hobby already has a category, inherit it by default.
-    // 4. Finally, fall back to the generic hobby-level categorizer.
-    let category: string;
+    for (let index = 0; index < items.length; index++) {
+      const raw = items[index];
+      const rawName = (raw?.name ?? "").trim();
 
-    if (providedCategory && providedCategory.trim().length > 0) {
-      category = providedCategory.trim();
-    } else if (customCategories.length > 0) {
-      category = await categorizeItemWithCustomCategories(
-        name,
-        description || null,
-        c.env.AI,
-        {
+      if (!rawName) {
+        skipped.push({ index, reason: "Missing name" });
+        continue;
+      }
+
+      const itemId = crypto.randomUUID();
+
+      try {
+        const result = await createItemCore(c, {
+          itemId,
+          hobbyId,
+          userId: user.userId,
+          name: rawName,
+          description: raw.description ?? null,
+          providedCategory: raw.category ?? undefined,
           hobbyCategory,
           customCategories,
-        }
-      );
-    } else if (hobbyCategory && hobbyCategory.trim().length > 0) {
-      category = hobbyCategory.trim();
-    } else {
-      category = await categorizeItem(name, description || null, c.env.AI);
+          imageUrl: null,
+        });
+
+        created.push(result);
+      } catch (err) {
+        console.error("Error creating bulk item at index", index, err);
+        skipped.push({ index, reason: "Failed to create item" });
+      }
     }
 
-    // Extract tags
-    const tags = await extractTags(name, description || null, c.env.AI);
-
-    // Create item in D1
-    await c.env.DB.prepare(
-      `INSERT INTO items (id, hobby_id, name, description, category, tags, embedding_id, image_url) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-      .bind(
-        itemId,
-        hobbyId,
-        name.trim(),
-        description?.trim() || null,
-        category,
-        JSON.stringify(tags),
-        itemId,
-        imageUrl
-      )
-      .run();
-
-    // Store embedding in Vectorize (optional in local dev)
-    if (c.env.HOBBY_ITEMS_INDEX) {
-      try {
-        await c.env.HOBBY_ITEMS_INDEX.insert([
-          {
-            id: itemId,
-            values: embedding,
-            metadata: {
-              type: "item",
-              userId: user.userId,
-              hobbyId: hobbyId,
-              name: name,
-              category: category,
-            },
-          },
-        ]);
-      } catch (error) {
-        // Vectorize may not be available in local development (Windows filename issues)
-        // Continue without Vectorize - app still works for basic CRUD
-        console.warn("Vectorize not available (local dev?):", error);
-      }
+    if (created.length === 0) {
+      return c.json(
+        {
+          error: "No items were created",
+          skipped,
+        },
+        400
+      );
     }
 
     return c.json({
       success: true,
-      item: {
-        id: itemId,
-        name: name.trim(),
-        description: description?.trim() || null,
-        category,
-        tags,
-        image_url: imageUrl,
-      },
+      items: created,
+      skipped,
     });
   } catch (error) {
-    console.error("Error creating item:", error);
-    return c.json({ error: "Failed to create item" }, 500);
+    console.error("Error creating bulk items:", error);
+    return c.json({ error: "Failed to create bulk items" }, 500);
   }
 });
 

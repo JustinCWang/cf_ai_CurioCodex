@@ -23,3 +23,5 @@ Can you pull all the prompts I am currently using and methods that call LLMS? I 
 Can you check my backend implementation for custom Item categories for any edge cases that I should be aware of or logic errors? Then can you build a basic frontend UI for me to debug and test the custom categorization for items works?
 
 I added a migration schema to add hobby_item_categories so we can allow users to create multiple custom item categories for a hobby before adding anything. Can you check if the schema integrates with our current one and help me update the APIs to account for the new schema and a basic frontend UI for testing?
+
+How can we parse CSV files using Hono? I want to implement bulk item adding where you can either import your csv files (for migration) and our app will parse the csv file and display it's contents for the user to review and then bulk add (just like normally adding). I also want to implement custom parsing via textbox where the user just pastes in a bunch of text. Ensure that we don't break the existing item adding functionality, but instead just add additional cases for if we wanted to bulk add. 

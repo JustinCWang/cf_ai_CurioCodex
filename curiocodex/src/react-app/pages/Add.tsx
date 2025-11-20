@@ -25,6 +25,13 @@ interface Item {
   tags: string[];
 }
 
+interface BulkDraftItem {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+}
+
 function Add() {
   const [type, setType] = useState<"hobby" | "item">("hobby");
   const [name, setName] = useState("");
@@ -47,6 +54,14 @@ function Add() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const navigate = useNavigate();
   const { token, isAuthenticated } = useAuth();
+
+  // Bulk item import state
+  const [itemMode, setItemMode] = useState<"single" | "bulk">("single");
+  const [bulkSource, setBulkSource] = useState<"csv" | "text">("csv");
+  const [bulkText, setBulkText] = useState("");
+  const [bulkNameDescDelimiter, setBulkNameDescDelimiter] = useState<string>("-");
+  const [bulkItems, setBulkItems] = useState<BulkDraftItem[]>([]);
+  const [csvIncludeFirstRow, setCsvIncludeFirstRow] = useState(false);
 
   const fetchHobbies = useCallback(async () => {
     try {
@@ -289,13 +304,6 @@ function Add() {
     setSuccess("");
     setLoading(true);
 
-    // For items, name is required unless an image is provided (AI will generate name)
-    if (type === "item" && !name.trim() && !imageFile) {
-      setError("Name is required, or upload an image for AI to generate one");
-      setLoading(false);
-      return;
-    }
-
     if (type === "item" && !selectedHobbyId) {
       setError("Please select a hobby");
       setLoading(false);
@@ -314,7 +322,7 @@ function Add() {
           name: name.trim(),
           description: description.trim() || null,
         };
-        
+
         // Include category if manually selected
         if (manualCategory) {
           requestBody.category = manualCategory;
@@ -335,7 +343,7 @@ function Add() {
         );
 
         const data = await parseResponse<{ success: boolean; hobby: Hobby }>(response);
-        
+
         if (data.success) {
           setSuccess(`Hobby "${data.hobby.name}" created successfully!`);
           setName("");
@@ -348,7 +356,7 @@ function Add() {
           setImagePreview(null);
           setShowCamera(false);
           if (cameraStream) {
-            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream.getTracks().forEach((track) => track.stop());
             setCameraStream(null);
           }
           // Redirect to hobbies page after 1.5 seconds
@@ -356,10 +364,18 @@ function Add() {
             navigate("/hobbies");
           }, 1500);
         }
-      } else {
-        // Create item - use FormData if image is present, otherwise JSON
+      } else if (itemMode === "single") {
+        // Create a single item - use FormData if image is present, otherwise JSON
+
+        // For items, name is required unless an image is provided (AI will generate name)
+        if (!name.trim() && !imageFile) {
+          setError("Name is required, or upload an image for AI to generate one");
+          setLoading(false);
+          return;
+        }
+
         let response: Response;
-        
+
         if (imageFile) {
           // Use FormData for image upload
           const formData = new FormData();
@@ -382,7 +398,7 @@ function Add() {
             name: name.trim(),
             description: description.trim() || null,
           };
-          
+
           // Include category if manually selected
           if (manualCategory) {
             requestBody.category = manualCategory;
@@ -399,9 +415,9 @@ function Add() {
         }
 
         const data = await parseResponse<{ success: boolean; item: Item }>(response);
-        
+
         if (data.success) {
-          const hobbyName = hobbies.find(h => h.id === selectedHobbyId)?.name || "hobby";
+          const hobbyName = hobbies.find((h) => h.id === selectedHobbyId)?.name || "hobby";
           setSuccess(`Item "${data.item.name}" added to ${hobbyName} successfully!`);
           setName("");
           setDescription("");
@@ -411,9 +427,71 @@ function Add() {
           setImagePreview(null);
           setShowCamera(false);
           if (cameraStream) {
-            cameraStream.getTracks().forEach(track => track.stop());
+            cameraStream.getTracks().forEach((track) => track.stop());
             setCameraStream(null);
           }
+          // Redirect to items page after 1.5 seconds
+          setTimeout(() => {
+            navigate("/items");
+          }, 1500);
+        }
+      } else {
+        // Bulk item creation
+        if (bulkItems.length === 0) {
+          setError("No items to import. Paste text or upload a CSV and parse it first.");
+          setLoading(false);
+          return;
+        }
+
+        const payload = {
+          items: bulkItems
+            .map((it) => {
+              const name = (it.name ?? "").trim();
+              const description = (it.description ?? "").trim();
+              const category = (it.category ?? "").trim();
+
+              if (!name) {
+                return null;
+              }
+
+              return {
+                name,
+                description: description || null,
+                ...(category ? { category } : {}),
+              };
+            })
+            .filter((it): it is { name: string; description: string | null; category?: string } => !!it),
+        };
+
+        const response = await apiRequest(
+          `/api/hobbies/${selectedHobbyId}/items/bulk`,
+          {
+            method: "POST",
+            body: JSON.stringify(payload),
+          },
+          token
+        );
+
+        const data = await parseResponse<{
+          success: boolean;
+          items: Item[];
+          skipped?: { index: number; reason: string }[];
+        }>(response);
+
+        if (data.success) {
+          const hobbyName = hobbies.find((h) => h.id === selectedHobbyId)?.name || "hobby";
+          const createdCount = data.items.length;
+          const skippedCount = data.skipped?.length ?? 0;
+          const summary =
+            skippedCount > 0
+              ? `Imported ${createdCount} items into ${hobbyName}. Skipped ${skippedCount} rows.`
+              : `Imported ${createdCount} items into ${hobbyName} successfully!`;
+
+          setSuccess(summary);
+          setBulkItems([]);
+          setBulkText("");
+          setShowAdvanced(false);
+
           // Redirect to items page after 1.5 seconds
           setTimeout(() => {
             navigate("/items");
@@ -476,6 +554,13 @@ function Add() {
           </div>
 
           <form onSubmit={handleSubmit} className="add-form">
+            {/* Shared datalist for item categories so both single and bulk item modes
+                can offer the same suggestions for this hobby. */}
+            <datalist id="item-category-options">
+              {itemCategories.map((cat) => (
+                <option key={cat} value={cat} />
+              ))}
+            </datalist>
             {type === "item" && (
               <>
                 <div className="form-group">
@@ -505,124 +590,438 @@ function Add() {
                   )}
                 </div>
 
+                {/* Item mode selector: single vs bulk */}
                 <div className="form-group">
-                  <label htmlFor="image">Item Photo</label>
-                  <div className="image-input-container">
-                    <input
-                      id="image"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      disabled={loading || !selectedHobbyId || showCamera}
-                      className="form-input"
-                    />
+                  <label>Item Mode</label>
+                  <div className="type-selector">
                     <button
                       type="button"
-                      onClick={showCamera ? handleStopCamera : handleStartCamera}
-                      disabled={loading || !selectedHobbyId}
-                      className="camera-button"
+                      className={`type-button ${itemMode === "single" ? "active" : ""}`}
+                      onClick={() => {
+                        setItemMode("single");
+                        setError("");
+                        setSuccess("");
+                      }}
                     >
-                      {showCamera ? "📷 Stop Camera" : "📷 Take Photo"}
+                      ✏️ Single item
+                    </button>
+                    <button
+                      type="button"
+                      className={`type-button ${itemMode === "bulk" ? "active" : ""}`}
+                      onClick={() => {
+                        setItemMode("bulk");
+                        setError("");
+                        setSuccess("");
+                      }}
+                    >
+                      📥 Bulk import
                     </button>
                   </div>
                   <p className="form-hint">
-                    Upload a photo or take one with your camera. AI will automatically suggest a name, description, and category if fields are empty.
+                    Switch to bulk import to add many items at once from CSV or plain text.
                   </p>
-                  
-                  {showCamera && (
-                    <div className="camera-container">
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className="camera-video"
-                        onLoadedMetadata={() => {
-                          // Ensure video plays when metadata is loaded
-                          if (videoRef.current) {
-                            videoRef.current.play().catch(err => {
-                              console.error("Error playing video:", err);
-                            });
-                          }
-                        }}
-                      />
-                      <div className="camera-controls">
+                </div>
+
+                {itemMode === "single" && (
+                  <>
+                    <div className="form-group">
+                      <label htmlFor="image">Item Photo</label>
+                      <div className="image-input-container">
+                        <input
+                          id="image"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                          disabled={loading || !selectedHobbyId || showCamera}
+                          className="form-input"
+                        />
                         <button
                           type="button"
-                          onClick={handleCapturePhoto}
-                          className="capture-button"
-                          disabled={loading}
+                          onClick={showCamera ? handleStopCamera : handleStartCamera}
+                          disabled={loading || !selectedHobbyId}
+                          className="camera-button"
                         >
-                          📸 Capture
+                          {showCamera ? "📷 Stop Camera" : "📷 Take Photo"}
+                        </button>
+                      </div>
+                      <p className="form-hint">
+                        Upload a photo or take one with your camera. AI will automatically suggest a name, description, and category if fields are empty.
+                      </p>
+                      
+                      {showCamera && (
+                        <div className="camera-container">
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="camera-video"
+                            onLoadedMetadata={() => {
+                              // Ensure video plays when metadata is loaded
+                              if (videoRef.current) {
+                                videoRef.current.play().catch(err => {
+                                  console.error("Error playing video:", err);
+                                });
+                              }
+                            }}
+                          />
+                          <div className="camera-controls">
+                            <button
+                              type="button"
+                              onClick={handleCapturePhoto}
+                              className="capture-button"
+                              disabled={loading}
+                            >
+                              📸 Capture
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleStopCamera}
+                              className="cancel-camera-button"
+                              disabled={loading}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {imagePreview && !showCamera && (
+                        <div className="image-preview-container">
+                          <img src={imagePreview} alt="Preview" className="image-preview" />
+                          <button
+                            type="button"
+                            onClick={handleRemoveImage}
+                            className="remove-image-button"
+                            disabled={loading}
+                          >
+                            ✕ Remove
+                          </button>
+                        </div>
+                      )}
+                      {imagePreview && !showCamera && (!name.trim() || !description.trim()) && (
+                        <p className="form-hint" style={{ color: "#9370db" }}>
+                          💡 Leave name/description empty to let AI generate them from the image
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="name">Name {imageFile ? "" : "*"}</label>
+                      <input
+                        id="name"
+                        type="text"
+                        placeholder="Enter item name..."
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required={!imageFile}
+                        disabled={loading}
+                        className="form-input"
+                      />
+                      <p className="form-hint">
+                        {imageFile 
+                          ? "Leave empty to let AI generate from the image, or enter manually."
+                          : "AI will automatically categorize and tag your item based on the name and description."}
+                      </p>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="description">Description</label>
+                      <textarea
+                        id="description"
+                        placeholder="Describe your item..."
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        disabled={loading}
+                        rows={4}
+                        className="form-textarea"
+                      />
+                      <p className="form-hint">
+                        Optional. A detailed description helps AI generate better tags and categorization.
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {itemMode === "bulk" && (
+                  <>
+                    <div className="form-group">
+                      <label>Bulk source</label>
+                      <div className="type-selector">
+                        <button
+                          type="button"
+                          className={`type-button ${bulkSource === "csv" ? "active" : ""}`}
+                          onClick={() => setBulkSource("csv")}
+                        >
+                          📄 CSV file
                         </button>
                         <button
                           type="button"
-                          onClick={handleStopCamera}
-                          className="cancel-camera-button"
-                          disabled={loading}
+                          className={`type-button ${bulkSource === "text" ? "active" : ""}`}
+                          onClick={() => setBulkSource("text")}
                         >
-                          Cancel
+                          ✍️ Plain text
                         </button>
                       </div>
                     </div>
-                  )}
-                  
-                  {imagePreview && !showCamera && (
-                    <div className="image-preview-container">
-                      <img src={imagePreview} alt="Preview" className="image-preview" />
-                      <button
-                        type="button"
-                        onClick={handleRemoveImage}
-                        className="remove-image-button"
-                        disabled={loading}
-                      >
-                        ✕ Remove
-                      </button>
-                    </div>
-                  )}
-                  {imagePreview && !showCamera && (!name.trim() || !description.trim()) && (
-                    <p className="form-hint" style={{ color: "#9370db" }}>
-                      💡 Leave name/description empty to let AI generate them from the image
-                    </p>
-                  )}
-                </div>
+
+                    {bulkSource === "csv" && (
+                      <div className="form-group">
+                        <label htmlFor="csv-upload">Upload CSV</label>
+                        <input
+                          id="csv-upload"
+                          type="file"
+                          accept=".csv,text/csv"
+                          disabled={loading}
+                          className="form-input"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              const text = String(reader.result ?? "");
+                              const lines = text
+                                .split(/\r?\n/)
+                                .map((l) => l.trim())
+                                .filter((l) => l.length > 0);
+
+                              if (lines.length === 0) {
+                                setBulkItems([]);
+                                return;
+                              }
+
+                              const dataRows = csvIncludeFirstRow ? lines : lines.slice(1);
+
+                              const drafts: BulkDraftItem[] = dataRows
+                                .map((row, idx) => {
+                                  const cols = row.split(",");
+                                  const name = (cols[0] ?? "").trim();
+                                  const descParts = cols.slice(1).map((c) => c.trim()).filter(Boolean);
+                                  const description = descParts.join("\n");
+
+                                  return {
+                                    id: `${Date.now()}-${idx}`,
+                                    name,
+                                    description,
+                                    category: "",
+                                  };
+                                })
+                                .filter((d) => d.name.length > 0);
+
+                              setBulkItems(drafts);
+                            };
+                            reader.readAsText(file);
+                          }}
+                        />
+                        <label style={{ display: "flex", alignItems: "center", marginTop: "0.5rem", gap: "0.4rem" }}>
+                          <input
+                            type="checkbox"
+                            checked={csvIncludeFirstRow}
+                            onChange={(e) => setCsvIncludeFirstRow(e.target.checked)}
+                            disabled={loading}
+                          />
+                          <span>Include first row as items (don&apos;t treat it as a header)</span>
+                        </label>
+                        <p className="form-hint">
+                          First column is the item name. All remaining columns in each row are joined
+                          into the description using newlines. Use the checkbox if your CSV has no
+                          header row and the first line is real data.
+                        </p>
+                      </div>
+                    )}
+
+                    {bulkSource === "text" && (
+                      <>
+                        <div className="form-group">
+                          <label htmlFor="bulk-text">Paste items</label>
+                          <textarea
+                            id="bulk-text"
+                            placeholder={"One item per line. Optionally use a separator, e.g.\nDune - Classic sci-fi novel\nFoundation - Another sci-fi classic"}
+                            value={bulkText}
+                            onChange={(e) => setBulkText(e.target.value)}
+                            disabled={loading}
+                            rows={8}
+                            className="form-textarea"
+                          />
+                          <p className="form-hint">
+                            Each line becomes an item. If you include a separator (default &quot;-&quot;),
+                            text before it is the name, after it is the description.
+                          </p>
+                        </div>
+
+                        <div className="form-group">
+                          <label htmlFor="bulk-delimiter">Name / Description separator</label>
+                          <input
+                            id="bulk-delimiter"
+                            type="text"
+                            value={bulkNameDescDelimiter}
+                            onChange={(e) => setBulkNameDescDelimiter(e.target.value || "-")}
+                            disabled={loading}
+                            className="form-input"
+                          />
+                          <p className="form-hint">
+                            We&apos;ll split each line on the first occurrence of this separator.
+                          </p>
+                        </div>
+
+                        <div className="form-group">
+                          <button
+                            type="button"
+                            className="camera-button"
+                            disabled={loading || !bulkText.trim()}
+                            onClick={() => {
+                              const delim = bulkNameDescDelimiter || "-";
+                              const drafts: BulkDraftItem[] = bulkText
+                                .split(/\r?\n/)
+                                .map((line, idx) => {
+                                  const trimmed = line.trim();
+                                  if (!trimmed) {
+                                    return null;
+                                  }
+                                  const sepIndex = trimmed.indexOf(delim);
+                                  let namePart = trimmed;
+                                  let descPart = "";
+                                  if (sepIndex >= 0) {
+                                    namePart = trimmed.slice(0, sepIndex);
+                                    descPart = trimmed.slice(sepIndex + delim.length);
+                                  }
+                                  return {
+                                    id: `${Date.now()}-${idx}`,
+                                    name: namePart.trim(),
+                                    description: descPart.trim(),
+                                    category: "",
+                                  };
+                                })
+                                .filter((d): d is BulkDraftItem => !!d && d.name.length > 0);
+
+                              setBulkItems(drafts);
+                            }}
+                          >
+                            Parse text into items
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {bulkItems.length > 0 && (
+                      <div className="form-group">
+                        <label>Preview items ({bulkItems.length})</label>
+                        <div className="bulk-preview">
+                          <div className="bulk-preview-header">
+                            <span>Name</span>
+                            <span>Description</span>
+                            <span>Category</span>
+                            <span>Actions</span>
+                          </div>
+                          {bulkItems.map((item, index) => (
+                            <div className="bulk-preview-row" key={item.id}>
+                              <input
+                                type="text"
+                                value={item.name}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setBulkItems((prev) =>
+                                    prev.map((it, i) =>
+                                      i === index ? { ...it, name: value } : it
+                                    )
+                                  );
+                                }}
+                                className="form-input"
+                              />
+                              <textarea
+                                value={item.description}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setBulkItems((prev) =>
+                                    prev.map((it, i) =>
+                                      i === index ? { ...it, description: value } : it
+                                    )
+                                  );
+                                }}
+                                rows={2}
+                                className="form-textarea"
+                              />
+                              <input
+                                type="text"
+                                value={item.category}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setBulkItems((prev) =>
+                                    prev.map((it, i) =>
+                                      i === index ? { ...it, category: value } : it
+                                    )
+                                  );
+                                }}
+                                className="form-input"
+                                list="item-category-options"
+                                placeholder={
+                                  hobbyCategory
+                                    ? `Leave empty to let AI use hobby category (${hobbyCategory})`
+                                    : "Leave empty to let AI choose a category"
+                                }
+                              />
+                              <button
+                                type="button"
+                                className="remove-image-button"
+                                onClick={() =>
+                                  setBulkItems((prev) => prev.filter((_, i) => i !== index))
+                                }
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="form-hint">
+                          Edit or remove any rows before importing. Items without a name will be
+                          skipped.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
               </>
             )}
 
-            <div className="form-group">
-              <label htmlFor="name">Name {type === "item" && imageFile ? "" : "*"}</label>
-              <input
-                id="name"
-                type="text"
-                placeholder={`Enter ${type} name...`}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required={type === "hobby" || (type === "item" && !imageFile)}
-                disabled={loading}
-                className="form-input"
-              />
-              <p className="form-hint">
-                {type === "item" && imageFile 
-                  ? "Leave empty to let AI generate from the image, or enter manually."
-                  : `AI will automatically categorize and tag your ${type} based on the name and description.`}
-              </p>
-            </div>
+            {/* Hobby name/description for hobby mode (single only) */}
+            {type === "hobby" && (
+              <>
+                <div className="form-group">
+                  <label htmlFor="name">Name *</label>
+                  <input
+                    id="name"
+                    type="text"
+                    placeholder="Enter hobby name..."
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    disabled={loading}
+                    className="form-input"
+                  />
+                  <p className="form-hint">
+                    AI will automatically categorize and tag your hobby based on the name and
+                    description.
+                  </p>
+                </div>
 
-            <div className="form-group">
-              <label htmlFor="description">Description</label>
-              <textarea
-                id="description"
-                placeholder={`Describe your ${type}...`}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                disabled={loading}
-                rows={4}
-                className="form-textarea"
-              />
-              <p className="form-hint">
-                Optional. A detailed description helps AI generate better tags and categorization.
-              </p>
-            </div>
+                <div className="form-group">
+                  <label htmlFor="description">Description</label>
+                  <textarea
+                    id="description"
+                    placeholder="Describe your hobby..."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    disabled={loading}
+                    rows={4}
+                    className="form-textarea"
+                  />
+                  <p className="form-hint">
+                    Optional. A detailed description helps AI generate better tags and
+                    categorization.
+                  </p>
+                </div>
+              </>
+            )}
 
             {/* Advanced Options */}
             <div className="advanced-section">
@@ -765,7 +1164,7 @@ function Add() {
                           new items in this hobby.
                         </p>
                       </>
-                    ) : (
+                    ) : itemMode === "single" ? (
                       <>
                         <input
                           id="category"
@@ -781,16 +1180,11 @@ function Add() {
                               : "Leave empty to let AI use the hobby category or type a custom item category"
                           }
                         />
-                        <datalist id="item-category-options">
-                          {itemCategories.map((cat) => (
-                            <option key={cat} value={cat} />
-                          ))}
-                        </datalist>
                         <p className="form-hint">
                           Start typing to create a new item category, or pick from your previously used item categories. Leave empty to inherit the hobby&apos;s category by default.
                         </p>
                       </>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               )}
