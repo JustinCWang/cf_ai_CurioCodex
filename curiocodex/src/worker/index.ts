@@ -15,6 +15,7 @@ import {
 import {
   generateEmbedding,
   categorizeItem,
+  categorizeItemWithCustomCategories,
   extractTags,
   averageEmbeddings,
   analyzeImage,
@@ -603,7 +604,7 @@ app.delete("/api/hobbies/:id", async (c) => {
 app.post("/api/hobbies/:hobbyId/items", async (c) => {
   const user = c.get("user");
   const hobbyId = c.req.param("hobbyId");
-  
+
   let name: string | undefined;
   let description: string | undefined;
   let providedCategory: string | undefined;
@@ -718,23 +719,61 @@ app.post("/api/hobbies/:hobbyId/items", async (c) => {
   }
 
   try {
-    // Verify hobby belongs to user
+    // Verify hobby belongs to user and get its category
     const hobby = await c.env.DB.prepare(
-      "SELECT id, user_id FROM hobbies WHERE id = ?"
+      "SELECT id, user_id, category FROM hobbies WHERE id = ?"
     )
       .bind(hobbyId)
-      .first<{ id: string; user_id: string }>();
+      .first<{ id: string; user_id: string; category: string | null }>();
 
     if (!hobby || hobby.user_id !== user.userId) {
       return c.json({ error: "Hobby not found" }, 404);
     }
 
+    const hobbyCategory = hobby.category;
+
+    // Look at existing item categories for this hobby so AI can choose
+    // between them when auto-categorizing.
+    const existingCategories = await c.env.DB.prepare(
+      `SELECT DISTINCT category as name
+       FROM items
+       WHERE hobby_id = ? AND category IS NOT NULL AND TRIM(category) != ''
+       ORDER BY category COLLATE NOCASE`
+    )
+      .bind(hobbyId)
+      .all<{ name: string }>();
+
+    const customCategories = existingCategories.results.map((row) => row.name);
+
     // Generate embedding
     const fullText = `${name} ${description || ""}`.trim();
     const embedding = await generateEmbedding(fullText, c.env.AI);
 
-    // Use provided category or auto-categorize
-    const category = providedCategory || await categorizeItem(name, description || null, c.env.AI);
+    // Decide on final item category:
+    // 1. If the user (or image analysis) provided a category, use it as-is.
+    // 2. Else, if we have any existing item categories for this hobby,
+    //    ask AI to choose between them (and the hobby category).
+    // 3. Else, if the hobby already has a category, inherit it by default.
+    // 4. Finally, fall back to the generic hobby-level categorizer.
+    let category: string;
+
+    if (providedCategory && providedCategory.trim().length > 0) {
+      category = providedCategory.trim();
+    } else if (customCategories.length > 0) {
+      category = await categorizeItemWithCustomCategories(
+        name,
+        description || null,
+        c.env.AI,
+        {
+          hobbyCategory,
+          customCategories,
+        }
+      );
+    } else if (hobbyCategory && hobbyCategory.trim().length > 0) {
+      category = hobbyCategory.trim();
+    } else {
+      category = await categorizeItem(name, description || null, c.env.AI);
+    }
 
     // Extract tags
     const tags = await extractTags(name, description || null, c.env.AI);
@@ -830,6 +869,47 @@ app.get("/api/hobbies/:hobbyId/items", async (c) => {
 });
 
 /**
+ * GET /api/hobbies/:hobbyId/item-categories
+ * Get the hobby's own category and all distinct item categories for that hobby.
+ * Used by the frontend so users can reuse or type custom item categories.
+ */
+app.get("/api/hobbies/:hobbyId/item-categories", async (c) => {
+  const user = c.get("user");
+  const hobbyId = c.req.param("hobbyId");
+
+  try {
+    const hobby = await c.env.DB.prepare(
+      "SELECT id, user_id, category FROM hobbies WHERE id = ?"
+    )
+      .bind(hobbyId)
+      .first<{ id: string; user_id: string; category: string | null }>();
+
+    if (!hobby || hobby.user_id !== user.userId) {
+      return c.json({ error: "Hobby not found" }, 404);
+    }
+
+    const categories = await c.env.DB.prepare(
+      `SELECT DISTINCT category as name
+       FROM items
+       WHERE hobby_id = ? AND category IS NOT NULL AND TRIM(category) != ''
+       ORDER BY category COLLATE NOCASE`
+    )
+      .bind(hobbyId)
+      .all<{ name: string }>();
+
+    const itemCategories = categories.results.map((row) => row.name);
+
+    return c.json({
+      hobbyCategory: hobby.category,
+      itemCategories,
+    });
+  } catch (error) {
+    console.error("Error fetching item categories for hobby:", error);
+    return c.json({ error: "Failed to fetch item categories" }, 500);
+  }
+});
+
+/**
  * PUT /api/hobbies/:hobbyId/items/:id
  * Update an existing item.
  */
@@ -846,14 +926,16 @@ app.put("/api/hobbies/:hobbyId/items/:id", async (c) => {
   try {
     // Verify hobby belongs to user
     const hobby = await c.env.DB.prepare(
-      "SELECT id, user_id FROM hobbies WHERE id = ?"
+      "SELECT id, user_id, category FROM hobbies WHERE id = ?"
     )
       .bind(hobbyId)
-      .first<{ id: string; user_id: string }>();
+      .first<{ id: string; user_id: string; category: string | null }>();
 
     if (!hobby || hobby.user_id !== user.userId) {
       return c.json({ error: "Hobby not found" }, 404);
     }
+
+    const hobbyCategory = hobby.category;
 
     // Verify item belongs to hobby
     const item = await c.env.DB.prepare(
@@ -870,8 +952,39 @@ app.put("/api/hobbies/:hobbyId/items/:id", async (c) => {
     const fullText = `${name} ${description || ""}`.trim();
     const embedding = await generateEmbedding(fullText, c.env.AI);
 
-    // Use provided category or re-categorize with AI
-    const category = providedCategory || await categorizeItem(name, description || null, c.env.AI);
+    // Use provided category or re-categorize with AI, taking into account
+    // existing per-hobby item categories so items can be auto-assigned
+    // into your custom categories over time.
+    const existingCategories = await c.env.DB.prepare(
+      `SELECT DISTINCT category as name
+       FROM items
+       WHERE hobby_id = ? AND category IS NOT NULL AND TRIM(category) != ''
+       ORDER BY category COLLATE NOCASE`
+    )
+      .bind(hobbyId)
+      .all<{ name: string }>();
+
+    const customCategories = existingCategories.results.map((row) => row.name);
+
+    let category: string;
+
+    if (providedCategory && providedCategory.trim().length > 0) {
+      category = providedCategory.trim();
+    } else if (customCategories.length > 0) {
+      category = await categorizeItemWithCustomCategories(
+        name,
+        description || null,
+        c.env.AI,
+        {
+          hobbyCategory,
+          customCategories,
+        }
+      );
+    } else if (hobbyCategory && hobbyCategory.trim().length > 0) {
+      category = hobbyCategory.trim();
+    } else {
+      category = await categorizeItem(name, description || null, c.env.AI);
+    }
     const tags = await extractTags(name, description || null, c.env.AI);
 
     // Update item in D1 database
@@ -948,10 +1061,10 @@ app.put("/api/hobbies/:hobbyId/items/:id/move", async (c) => {
   try {
     // Verify old hobby belongs to user
     const oldHobby = await c.env.DB.prepare(
-      "SELECT id, user_id FROM hobbies WHERE id = ?"
+      "SELECT id, user_id, category FROM hobbies WHERE id = ?"
     )
       .bind(oldHobbyId)
-      .first<{ id: string; user_id: string }>();
+      .first<{ id: string; user_id: string; category: string | null }>();
 
     if (!oldHobby || oldHobby.user_id !== user.userId) {
       return c.json({ error: "Source hobby not found" }, 404);
@@ -959,10 +1072,10 @@ app.put("/api/hobbies/:hobbyId/items/:id/move", async (c) => {
 
     // Verify new hobby belongs to same user
     const newHobby = await c.env.DB.prepare(
-      "SELECT id, user_id FROM hobbies WHERE id = ?"
+      "SELECT id, user_id, category FROM hobbies WHERE id = ?"
     )
       .bind(newHobbyId)
-      .first<{ id: string; user_id: string }>();
+      .first<{ id: string; user_id: string; category: string | null }>();
 
     if (!newHobby || newHobby.user_id !== user.userId) {
       return c.json({ error: "Target hobby not found" }, 404);
@@ -1011,7 +1124,7 @@ app.put("/api/hobbies/:hobbyId/items/:id/move", async (c) => {
               userId: user.userId,
               hobbyId: newHobbyId,
               name: item.name,
-              category: item.category || "Other",
+              category: item.category || newHobby.category || "Other",
             },
           },
         ]);

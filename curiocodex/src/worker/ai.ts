@@ -4,8 +4,10 @@
  */
 
 /**
- * Available categories for hobbies and items.
- * This list is used for both AI categorization and manual selection.
+ * Available high-level categories for hobbies.
+ * These are used for hobby categorization and as a general fallback.
+ * Item categories can now be fully custom per hobby and are not restricted
+ * to this list.
  */
 export const CATEGORIES = [
   "Arts & Crafts",
@@ -24,7 +26,7 @@ export const CATEGORIES = [
   "Other",
 ] as const;
 
-export type Category = typeof CATEGORIES[number];
+export type Category = (typeof CATEGORIES)[number];
 
 /**
  * Generate embedding vector for a hobby/item using Workers AI.
@@ -106,6 +108,118 @@ Return ONLY the category name, nothing else:`;
   } catch (error) {
     console.error("Error categorizing item:", error);
     return "Other"; // Default fallback
+  }
+}
+
+/**
+ * Auto-categorize an item using custom, per-hobby categories.
+ *
+ * - Prefers the hobby's own category when nothing else clearly fits.
+ * - Can choose between previously used item categories for this hobby.
+ * - Falls back to the generic CATEGORIES list if no custom categories exist.
+ */
+export async function categorizeItemWithCustomCategories(
+  name: string,
+  description: string | null,
+  ai: Ai,
+  options: {
+    hobbyCategory?: string | null;
+    customCategories?: string[];
+  } = {}
+): Promise<string> {
+  try {
+    const rawCustom = options.customCategories ?? [];
+
+    // Normalize and de-duplicate custom categories
+    const customCategories = Array.from(
+      new Set(
+        rawCustom
+          .map((c) => c.trim())
+          .filter((c) => c.length > 0)
+      )
+    );
+
+    const availableCategories: string[] = [];
+
+    const hobbyCategory =
+      options.hobbyCategory && options.hobbyCategory.trim().length > 0
+        ? options.hobbyCategory.trim()
+        : null;
+
+    if (hobbyCategory) {
+      availableCategories.push(hobbyCategory);
+    }
+
+    for (const cat of customCategories) {
+      const exists = availableCategories.some(
+        (existing) => existing.toLowerCase() === cat.toLowerCase()
+      );
+      if (!exists) {
+        availableCategories.push(cat);
+      }
+    }
+
+    // If we don't have any per-hobby categories yet, fall back to the
+    // generic categorization function which uses the base CATEGORIES list.
+    if (availableCategories.length === 0) {
+      return categorizeItem(name, description, ai);
+    }
+
+    // Always include "Other" as a safe fallback option
+    if (!availableCategories.some((c) => c.toLowerCase() === "other")) {
+      availableCategories.push("Other");
+    }
+
+    const prompt = `You are categorizing an item inside a specific hobby collection.
+
+Available categories (choose exactly ONE of these):
+- ${availableCategories.join("\n- ")}
+
+The hobby's main category is: ${hobbyCategory ?? "None provided"}
+
+Item to categorize:
+Name: ${name}
+Description: ${description || "No description provided"}
+
+Rules:
+- You MUST respond with exactly one category name from the list above.
+- If nothing fits well, respond with "Other".
+- Do NOT invent new category names.
+
+Category:`;
+
+    const response = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+      prompt,
+      max_tokens: 20,
+      temperature: 0.2,
+    });
+
+    if ("request_id" in response) {
+      throw new Error("Async response not supported");
+    }
+
+    const raw = (response.response || "").trim();
+
+    // Try to normalize the model's answer back to one of our labels
+    const match = availableCategories.find(
+      (cat) => cat.toLowerCase() === raw.toLowerCase()
+    );
+
+    if (match) {
+      return match;
+    }
+
+    // Fallback: prefer hobby category, then first custom category, then "Other"
+    if (hobbyCategory) {
+      return hobbyCategory;
+    }
+
+    const first = availableCategories[0];
+    return first || "Other";
+  } catch (error) {
+    console.error("Error categorizing item with custom categories:", error);
+    // Safe fallback: use generic categorizer which already handles errors
+    return categorizeItem(name, description, ai);
   }
 }
 

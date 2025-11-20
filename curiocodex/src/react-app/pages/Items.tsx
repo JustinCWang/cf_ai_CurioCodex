@@ -6,12 +6,12 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiRequest, parseResponse } from "../utils/api";
-import { CATEGORIES } from "../utils/categories";
 import "./Items.css";
 
 interface Hobby {
   id: string;
   name: string;
+  category?: string | null;
 }
 
 interface Item {
@@ -40,7 +40,14 @@ function Items() {
   const [editDescription, setEditDescription] = useState("");
   const [editCategory, setEditCategory] = useState<string>("");
   const [editHobbyId, setEditHobbyId] = useState<string>("");
+  const [editHobbyCategory, setEditHobbyCategory] = useState<string | null>(null);
+  const [editItemCategories, setEditItemCategories] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{ itemId: string; hobbyId: string } | null>(null);
+  const [testHobbyId, setTestHobbyId] = useState<string>("");
+  const [testHobbyCategory, setTestHobbyCategory] = useState<string | null>(null);
+  const [testItemCategories, setTestItemCategories] = useState<string[]>([]);
+  const [testLoading, setTestLoading] = useState(false);
+  const [testError, setTestError] = useState("");
   const { token, isAuthenticated } = useAuth();
 
   const fetchAllItems = useCallback(async () => {
@@ -95,6 +102,35 @@ function Items() {
     }
   }, [token]);
 
+  const fetchEditCategories = useCallback(
+    async (hobbyId: string) => {
+      if (!hobbyId) {
+        setEditHobbyCategory(null);
+        setEditItemCategories([]);
+        return;
+      }
+
+      try {
+        const response = await apiRequest(
+          `/api/hobbies/${hobbyId}/item-categories`,
+          { method: "GET" },
+          token
+        );
+        const data = await parseResponse<{
+          hobbyCategory: string | null;
+          itemCategories: string[];
+        }>(response);
+        setEditHobbyCategory(data.hobbyCategory);
+        setEditItemCategories(data.itemCategories);
+      } catch (err) {
+        console.error("Error fetching item categories for edit modal:", err);
+        setEditHobbyCategory(null);
+        setEditItemCategories([]);
+      }
+    },
+    [token]
+  );
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchAllItems();
@@ -103,13 +139,58 @@ function Items() {
     }
   }, [isAuthenticated, fetchAllItems]);
 
-  const handleEdit = (item: Item, hobbyId: string) => {
+  const fetchTestCategories = useCallback(
+    async (hobbyId: string) => {
+      if (!hobbyId) {
+        setTestHobbyCategory(null);
+        setTestItemCategories([]);
+        setTestError("");
+        return;
+      }
+
+      try {
+        setTestLoading(true);
+        setTestError("");
+        const response = await apiRequest(
+          `/api/hobbies/${hobbyId}/item-categories`,
+          { method: "GET" },
+          token
+        );
+        const data = await parseResponse<{
+          hobbyCategory: string | null;
+          itemCategories: string[];
+        }>(response);
+        setTestHobbyCategory(data.hobbyCategory);
+        setTestItemCategories(data.itemCategories);
+      } catch (err) {
+        console.error("Error fetching categories for tester:", err);
+        const message =
+          err instanceof Error ? err.message : "Failed to load categories";
+        setTestError(message);
+        setTestHobbyCategory(null);
+        setTestItemCategories([]);
+      } finally {
+        setTestLoading(false);
+      }
+    },
+    [token]
+  );
+
+  const handleEdit = async (item: Item, hobbyId: string) => {
     setEditingItem({ item, hobbyId });
     setEditName(item.name);
     setEditDescription(item.description || "");
     setEditCategory(item.category || "");
     setEditHobbyId(hobbyId);
+    await fetchEditCategories(hobbyId);
   };
+
+  // When the target hobby changes in the edit modal, refresh the available item categories
+  useEffect(() => {
+    if (editingItem && editHobbyId) {
+      fetchEditCategories(editHobbyId);
+    }
+  }, [editingItem, editHobbyId, fetchEditCategories]);
 
   const handleCancelEdit = () => {
     setEditingItem(null);
@@ -117,6 +198,8 @@ function Items() {
     setEditDescription("");
     setEditCategory("");
     setEditHobbyId("");
+    setEditHobbyCategory(null);
+    setEditItemCategories([]);
   };
 
   const handleSaveEdit = async () => {
@@ -221,6 +304,155 @@ function Items() {
             📦 Add New Item
           </Link>
         </div>
+
+        {/* Category testing panel */}
+        {hobbies.length > 0 && (
+          <div
+            style={{
+              marginBottom: "1.5rem",
+              padding: "1rem 1.25rem",
+              borderRadius: "0.75rem",
+              background: "rgba(15, 15, 35, 0.85)",
+              border: "1px solid rgba(148, 163, 255, 0.4)",
+              boxShadow: "0 12px 30px rgba(15, 23, 42, 0.7)",
+            }}
+          >
+            <h2
+              style={{
+                margin: "0 0 0.75rem 0",
+                fontSize: "1.05rem",
+                fontWeight: 600,
+              }}
+            >
+              Category Tester
+            </h2>
+            <p
+              style={{
+                margin: "0 0 0.75rem 0",
+                fontSize: "0.85rem",
+                color: "#9ca3af",
+              }}
+            >
+              Pick a hobby to see its main category and all item categories that
+              are currently in use. New items will inherit the hobby category
+              when you leave the item category empty.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.75rem",
+                alignItems: "center",
+                marginBottom: "0.75rem",
+              }}
+            >
+              <label
+                htmlFor="category-tester-hobby"
+                style={{ fontSize: "0.9rem" }}
+              >
+                Hobby:
+              </label>
+              <select
+                id="category-tester-hobby"
+                value={testHobbyId}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setTestHobbyId(value);
+                  fetchTestCategories(value);
+                }}
+                className="form-input"
+                style={{ maxWidth: "260px" }}
+              >
+                <option value="">Select a hobby…</option>
+                {hobbies.map((hobby) => (
+                  <option key={hobby.id} value={hobby.id}>
+                    {hobby.name}
+                  </option>
+                ))}
+              </select>
+              {testLoading && (
+                <span style={{ fontSize: "0.85rem", color: "#a5b4fc" }}>
+                  Loading categories…
+                </span>
+              )}
+            </div>
+
+            {testError && (
+              <div className="error-message" style={{ marginBottom: "0.75rem" }}>
+                {testError}
+              </div>
+            )}
+
+            {testHobbyId && !testError && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.4rem",
+                  fontSize: "0.85rem",
+                }}
+              >
+                <div>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      color: "#e5e7eb",
+                      marginRight: "0.35rem",
+                    }}
+                  >
+                    Hobby category:
+                  </span>
+                  <span style={{ color: "#c4b5fd" }}>
+                    {testHobbyCategory && testHobbyCategory.trim()
+                      ? testHobbyCategory
+                      : "None (AI / uncategorized)"}
+                  </span>
+                </div>
+                <div>
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      color: "#e5e7eb",
+                      marginRight: "0.35rem",
+                    }}
+                  >
+                    Item categories in this hobby:
+                  </span>
+                  {testItemCategories.length === 0 ? (
+                    <span style={{ color: "#9ca3af" }}>
+                      None yet. When you add items and set custom categories,
+                      they will appear here and be reused for auto-categorization.
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        flexWrap: "wrap",
+                        gap: "0.35rem",
+                      }}
+                    >
+                      {testItemCategories.map((cat) => (
+                        <span
+                          key={cat}
+                          style={{
+                            padding: "0.15rem 0.45rem",
+                            borderRadius: "999px",
+                            background: "rgba(79, 70, 229, 0.25)",
+                            border: "1px solid rgba(129, 140, 248, 0.7)",
+                            color: "#e0e7ff",
+                          }}
+                        >
+                          {cat}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {error && <div className="error-message">{error}</div>}
 
@@ -353,21 +585,33 @@ function Items() {
               </div>
               <div className="form-group">
                 <label htmlFor="edit-item-category">Category</label>
-                <select
+                <input
                   id="edit-item-category"
+                  type="text"
                   value={editCategory}
                   onChange={(e) => setEditCategory(e.target.value)}
                   className="form-input"
-                >
-                  <option value="">Auto-categorize with AI</option>
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
+                  list="edit-item-category-options"
+                  placeholder={
+                    editHobbyCategory
+                      ? `Leave empty to use the hobby category (${editHobbyCategory}), or type a custom item category`
+                      : "Leave empty to let AI use the hobby category or type a custom item category"
+                  }
+                />
+                <datalist id="edit-item-category-options">
+                  {editItemCategories.map((cat) => (
+                    <option key={cat} value={cat} />
                   ))}
-                </select>
-                <p className="form-hint" style={{ fontSize: "0.85rem", color: "#888", marginTop: "0.5rem" }}>
-                  Select a category manually or leave as "Auto-categorize" to let AI decide.
+                </datalist>
+                <p
+                  className="form-hint"
+                  style={{
+                    fontSize: "0.85rem",
+                    color: "#888",
+                    marginTop: "0.5rem",
+                  }}
+                >
+                  Start typing to create a new item category, or pick from your previously used item categories. Leave empty to inherit the hobby&apos;s category by default.
                 </p>
               </div>
               <div className="modal-actions">

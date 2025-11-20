@@ -36,6 +36,8 @@ function Add() {
   const [success, setSuccess] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [manualCategory, setManualCategory] = useState<string>("");
+  const [itemCategories, setItemCategories] = useState<string[]>([]);
+  const [hobbyCategory, setHobbyCategory] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
@@ -62,12 +64,57 @@ function Add() {
     }
   }, [token]);
 
+  const fetchItemCategoriesForHobby = useCallback(
+    async (hobbyId: string) => {
+      if (!hobbyId) {
+        setItemCategories([]);
+        setHobbyCategory(null);
+        return;
+      }
+
+      try {
+        const response = await apiRequest(
+          `/api/hobbies/${hobbyId}/item-categories`,
+          { method: "GET" },
+          token
+        );
+        const data = await parseResponse<{
+          hobbyCategory: string | null;
+          itemCategories: string[];
+        }>(response);
+        setHobbyCategory(data.hobbyCategory);
+        setItemCategories(data.itemCategories);
+      } catch (err) {
+        console.error("Error fetching item categories for hobby:", err);
+        // Don't surface this as a blocking error; the user can still type freely.
+        setHobbyCategory(null);
+        setItemCategories([]);
+      }
+    },
+    [token]
+  );
+
   // Fetch hobbies when component mounts and when type changes to "item"
   useEffect(() => {
     if (isAuthenticated && type === "item") {
       fetchHobbies();
     }
   }, [type, isAuthenticated, fetchHobbies]);
+
+  // When the selected hobby changes (for items), refresh the per-hobby item categories
+  useEffect(() => {
+    if (isAuthenticated && type === "item" && selectedHobbyId) {
+      fetchItemCategoriesForHobby(selectedHobbyId);
+    } else if (type !== "item") {
+      setItemCategories([]);
+      setHobbyCategory(null);
+    }
+  }, [
+    isAuthenticated,
+    type,
+    selectedHobbyId,
+    fetchItemCategoriesForHobby,
+  ]);
 
   // Cleanup camera stream on unmount
   useEffect(() => {
@@ -391,6 +438,9 @@ function Add() {
                 setType("hobby");
                 setError("");
                 setSuccess("");
+                setManualCategory("");
+                setItemCategories([]);
+                setHobbyCategory(null);
               }}
             >
               ✨ Hobby
@@ -402,6 +452,7 @@ function Add() {
                 setType("item");
                 setError("");
                 setSuccess("");
+                // Keep manualCategory, but clear any hobby-only category selection state
               }}
             >
               📦 Item
@@ -569,24 +620,55 @@ function Add() {
               {showAdvanced && (
                 <div className="advanced-content">
                   <div className="form-group">
-                    <label htmlFor="category">Category</label>
-                    <select
-                      id="category"
-                      value={manualCategory}
-                      onChange={(e) => setManualCategory(e.target.value)}
-                      disabled={loading}
-                      className="form-select"
-                    >
-                      <option value="">Auto-categorize with AI</option>
-                      {CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="form-hint">
-                      Select a category manually to override AI categorization. Leave as "Auto-categorize" to let AI decide.
-                    </p>
+                    <label htmlFor="category">
+                      Category
+                    </label>
+                    {type === "hobby" ? (
+                      <>
+                        <select
+                          id="category"
+                          value={manualCategory}
+                          onChange={(e) => setManualCategory(e.target.value)}
+                          disabled={loading}
+                          className="form-select"
+                        >
+                          <option value="">Auto-categorize with AI</option>
+                          {CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="form-hint">
+                          Select a high-level hobby category manually, or leave on auto to let AI pick one.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          id="category"
+                          type="text"
+                          value={manualCategory}
+                          onChange={(e) => setManualCategory(e.target.value)}
+                          disabled={loading || !selectedHobbyId}
+                          className="form-input"
+                          list="item-category-options"
+                          placeholder={
+                            hobbyCategory
+                              ? `Leave empty to use the hobby category (${hobbyCategory}), or type a custom item category`
+                              : "Leave empty to let AI use the hobby category or type a custom item category"
+                          }
+                        />
+                        <datalist id="item-category-options">
+                          {itemCategories.map((cat) => (
+                            <option key={cat} value={cat} />
+                          ))}
+                        </datalist>
+                        <p className="form-hint">
+                          Start typing to create a new item category, or pick from your previously used item categories. Leave empty to inherit the hobby&apos;s category by default.
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
