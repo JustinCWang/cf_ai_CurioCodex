@@ -1,15 +1,14 @@
 /**
- * Dashboard/Home page - Overview of user's hobby collection and activity.
+ * Dashboard/Home page - Galaxy background with constellation routes.
  */
+
+import Constellation from "../components/Constellation";
+import "./Dashboard.css";
 
 function Dashboard() {
   return (
-    <div className="page">
-      <h1>Dashboard</h1>
-      <div className="page-content">
-        <p>Welcome to your mystical hobby collection! Here you'll find an overview of your activities.</p>
-        {/* Dashboard content will go here */}
-      </div>
+    <div className="dashboard-page" aria-label="CurioCodex star map">
+      <Constellation />
     </div>
   );
 }

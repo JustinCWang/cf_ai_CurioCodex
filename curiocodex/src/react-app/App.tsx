@@ -1,11 +1,10 @@
 /**
  * Main React component for the CurioCodex application.
- * Root UI component with mystical/magic-themed design.
+ * Root UI component with galaxy-themed design and constellation navigation.
  */
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
-import Navigation from "./components/Navigation";
 import AuthIndicator from "./components/AuthIndicator";
 import Dashboard from "./pages/Dashboard";
 import Hobbies from "./pages/Hobbies";
@@ -19,18 +18,54 @@ import Register from "./pages/Register";
 import "./App.css";
 
 function App() {
+  const headerRoutes = [
+    { path: "/", label: "Atlas" },
+    { path: "/hobbies", label: "Hobbies" },
+    { path: "/items", label: "Items" },
+    { path: "/discover", label: "Discover" },
+    { path: "/activity", label: "Activity" },
+    { path: "/settings", label: "Settings" },
+  ];
+
   return (
     <BrowserRouter>
       <AuthProvider>
         <div className="app">
           <header className="header">
-            <AuthIndicator />
-            <h1 className="title">✨ CurioCodex ✨</h1>
-            <p className="subtitle">A mystical repository for your hobbies and curiosities</p>
+            <div className="header-left">
+              <div className="brand-mark" aria-hidden="true">
+                ✧
+              </div>
+              <div className="brand-meta">
+                <span className="brand-name">CurioCodex</span>
+              </div>
+            </div>
+            <nav className="header-center" aria-label="Primary">
+              {headerRoutes.map((route, index) => (
+                <>
+                  <NavLink
+                    key={route.path}
+                    to={route.path}
+                    className={({ isActive }) =>
+                      `header-nav-link ${isActive ? "active" : ""}`
+                    }
+                    end={route.path === "/"}
+                  >
+                    {route.label}
+                  </NavLink>
+                  {index < headerRoutes.length - 1 && (
+                    <span className="header-separator" aria-hidden="true">
+                      •
+                    </span>
+                  )}
+                </>
+              ))}
+            </nav>
+            <div className="header-right">
+              <AuthIndicator />
+            </div>
           </header>
-          
-          <Navigation />
-          
+
           <main className="main-content">
             <Routes>
               <Route path="/" element={<Dashboard />} />
@@ -46,7 +81,7 @@ function App() {
           </main>
           
           <footer className="footer">
-            <p>Powered by ancient magic and modern technology</p>
+            <p>© 2025 CurioCodex · Powered by your curiosity and modern technology</p>
           </footer>
         </div>
       </AuthProvider>

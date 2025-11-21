@@ -1,0 +1,12 @@
+/**
+ * Dashboard page styles - full-screen constellation over galaxy background.
+ */
+
+.dashboard-page {
+  min-height: calc(100vh - 80px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.5rem;
+}
+

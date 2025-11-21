@@ -1,0 +1,134 @@
+/* Constellation - interactive star map for primary navigation */
+
+.constellation-section {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.constellation-container {
+  position: relative;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.constellation-container::before {
+  content: none;
+}
+
+.constellation-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.constellation-line {
+  stroke: rgba(173, 216, 230, 0.8);
+  stroke-width: 0.25;
+  stroke-linecap: round;
+  stroke-dasharray: 1.5 1.5;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 2px rgba(135, 206, 250, 0.8));
+  animation: constellation-pulse 6s ease-in-out infinite alternate;
+}
+
+.constellation-star {
+  cursor: pointer;
+  transition: opacity 0.18s ease-out;
+}
+
+.constellation-star-core {
+  animation: star-twinkle 2.8s ease-in-out infinite alternate;
+}
+
+.constellation-star-glow {
+  opacity: 0.9;
+  animation: star-glow-pulse 4.3s ease-in-out infinite alternate;
+}
+
+.constellation-star-outline {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.7);
+  stroke-width: 0.18;
+  opacity: 0.9;
+}
+
+.constellation-star-label {
+  fill: #fefaff;
+  font-size: 2.4px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-shadow:
+    0 0 3px rgba(0, 0, 0, 0.85),
+    0 0 8px rgba(75, 0, 130, 0.8);
+}
+
+.constellation-star:focus-visible,
+.constellation-star:hover {
+  outline: none;
+}
+
+.constellation-star:hover .constellation-star-outline,
+.constellation-star:focus-visible .constellation-star-outline {
+  stroke: #ffd27f;
+  stroke-width: 0.3;
+}
+
+.constellation-star:hover .constellation-star-glow,
+.constellation-star:focus-visible .constellation-star-glow {
+  opacity: 1;
+}
+
+.constellation-star:focus-visible .constellation-star-outline {
+  stroke: #ffd27f;
+  stroke-width: 0.4;
+}
+
+@keyframes star-twinkle {
+  0% {
+    r: 1.2;
+  }
+  50% {
+    r: 1.4;
+  }
+  100% {
+    r: 1.25;
+  }
+}
+
+@keyframes star-glow-pulse {
+  0% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes constellation-pulse {
+  0% {
+    stroke-opacity: 0.3;
+  }
+  50% {
+    stroke-opacity: 0.8;
+  }
+  100% {
+    stroke-opacity: 0.45;
+  }
+}
+
+@media (max-width: 900px) {
+  .constellation-section {
+    max-width: 100%;
+    padding-inline: 0.25rem;
+  }
+}
+
+
