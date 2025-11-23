@@ -693,19 +693,6 @@ function Items() {
                   <div className="items-list" aria-label="Items list view">
                     {group.items.map((item) => (
                       <div key={item.id} className="item-row">
-                        {item.image_url && (
-                          <div className="item-row-image-wrapper">
-                            <img
-                              src={item.image_url}
-                              alt={item.name}
-                              className="item-row-image"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display =
-                                  "none";
-                              }}
-                            />
-                          </div>
-                        )}
                         <div className="item-row-main">
                           <div className="item-row-primary">
                             <span className="item-row-name">{item.name}</span>

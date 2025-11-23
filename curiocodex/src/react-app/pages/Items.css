@@ -492,7 +492,7 @@
 
 .item-row {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 4fr) auto;
+  grid-template-columns: minmax(0, 3fr) auto;
   align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
@@ -532,12 +532,16 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .item-row-name {
   font-size: 0.95rem;
   font-weight: 600;
   color: #e5e7eb;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item-row-category {
