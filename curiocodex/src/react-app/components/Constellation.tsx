@@ -6,6 +6,9 @@
 import {
   KeyboardEvent,
   MouseEvent as ReactMouseEvent,
+  TouchEvent as ReactTouchEvent,
+  useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -43,35 +46,27 @@ type DragState = {
   hasMoved: boolean;
 };
 
-// Approximate coordinates for a hexagon with a central star.
-// ViewBox: 0..100 (x), 0..60 (y)
+// Initial coordinates for the constellation (normalized to the SVG viewBox).
+// ViewBox: 0..100 (x), 0..80 (y)
 const INITIAL_STARS: StarConfig[] = [
-  // Center
-  { id: "dashboard", label: "Atlas", x: 50, y: 30, route: "/" },
-  // Hexagon vertices around the center
-  { id: "settings", label: "Settings", x: 50, y: 8, route: "/settings" },
-  { id: "discover", label: "Discover", x: 72, y: 20, route: "/discover" },
-  { id: "items", label: "Items", x: 72, y: 40, route: "/items" },
-  { id: "add", label: "Add", x: 50, y: 52, route: "/add" },
-  { id: "activity", label: "Activity", x: 28, y: 40, route: "/activity" },
-  { id: "hobbies", label: "Hobbies", x: 28, y: 20, route: "/hobbies" },
+  { id: "dashboard", label: "Atlas", x: 56.95067264573992, y: 36.20938628158841, route: "/" },
+  { id: "settings", label: "Settings", x: 87.4439461883408, y: 31.25992779783394, route: "/settings" },
+  { id: "discover", label: "Discover", x: 35.22869955156952, y: 49.74729241877257, route: "/discover" },
+  { id: "items", label: "Items", x: 16.618834080717498, y: 40.14440433212996, route: "/items" },
+  { id: "add", label: "Add", x: 46.86098654708521, y: 73, route: "/add" },
+  { id: "activity", label: "Activity", x: 75.26905829596413, y: 58.19494584837544, route: "/activity" },
+  { id: "hobbies", label: "Hobbies", x: 19.704035874439473, y: 13.931407942238266, route: "/hobbies" },
 ];
 
-const CONNECTIONS: Connection[] = [
-  // Hexagon outline
-  { from: "settings", to: "discover" },
-  { from: "discover", to: "items" },
-  { from: "items", to: "add" },
-  { from: "add", to: "activity" },
-  { from: "activity", to: "hobbies" },
-  { from: "hobbies", to: "settings" },
-  // Spokes from center
-  { from: "dashboard", to: "settings" },
+// Base constellation connections based on initial layout
+const BASE_CONNECTIONS: Connection[] = [
   { from: "dashboard", to: "discover" },
-  { from: "dashboard", to: "items" },
-  { from: "dashboard", to: "add" },
   { from: "dashboard", to: "activity" },
-  { from: "dashboard", to: "hobbies" },
+  { from: "hobbies", to: "items" },
+  { from: "items", to: "discover" },
+  { from: "discover", to: "add" },
+  { from: "discover", to: "dashboard"},
+  { from: "activity", to: "settings"}
 ];
 
 function Constellation() {
@@ -87,8 +82,45 @@ function Constellation() {
     return INITIAL_STARS;
   });
   const [, setDragState] = useState<DragState | null>(null);
+  const [starScale, setStarScale] = useState(1);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const navigate = useNavigate();
+
+  // Keep stars comfortably away from the very edge of the SVG so labels
+  // don't get visually clipped when dragged near the border, while still
+  // allowing a generous vertical and horizontal movement range.
+  const DRAG_BOUNDS = {
+    minX: 5,
+    maxX: 95,
+    minY: 7,
+    maxY: 73,
+  };
+
+  // Adjust star scale based on viewport size so that on small screens
+  // stars are easier to see and tap, while remaining reasonably sized
+  // on larger desktop displays.
+  useEffect(() => {
+    const updateScale = () => {
+      if (typeof window === "undefined") return;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+
+      if (width <= 480 || height <= 600) {
+        // Small phones / very short viewports
+        setStarScale(1.6);
+      } else if (width <= 900) {
+        // Tablets / small laptops
+        setStarScale(1.3);
+      } else {
+        // Desktop and larger
+        setStarScale(1);
+      }
+    };
+
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
 
   const getSvgPoint = (
     clientX: number,
@@ -100,7 +132,7 @@ function Constellation() {
     if (!rect.width || !rect.height) return null;
 
     const x = ((clientX - rect.left) / rect.width) * 100;
-    const y = ((clientY - rect.top) / rect.height) * 60;
+    const y = ((clientY - rect.top) / rect.height) * 80;
     return { x, y };
   };
 
@@ -115,12 +147,8 @@ function Constellation() {
     }
   };
 
-  const handleStarMouseDown = (
-    event: ReactMouseEvent<SVGGElement>,
-    starId: StarId,
-  ) => {
-    event.preventDefault();
-    const point = getSvgPoint(event.clientX, event.clientY);
+  const startDrag = (clientX: number, clientY: number, starId: StarId) => {
+    const point = getSvgPoint(clientX, clientY);
     if (!point) return;
     const star = stars.find((s) => s.id === starId);
     if (!star) return;
@@ -133,16 +161,16 @@ function Constellation() {
     });
   };
 
-  const handleSvgMouseMove = (event: ReactMouseEvent<SVGSVGElement>) => {
+  const moveDrag = (clientX: number, clientY: number) => {
     setDragState((current) => {
       if (!current) return current;
-      const point = getSvgPoint(event.clientX, event.clientY);
+      const point = getSvgPoint(clientX, clientY);
       if (!point) return current;
 
       const rawX = point.x - current.offsetX;
       const rawY = point.y - current.offsetY;
-      const clampedX = Math.max(5, Math.min(95, rawX));
-      const clampedY = Math.max(5, Math.min(55, rawY));
+      const clampedX = Math.max(DRAG_BOUNDS.minX, Math.min(DRAG_BOUNDS.maxX, rawX));
+      const clampedY = Math.max(DRAG_BOUNDS.minY, Math.min(DRAG_BOUNDS.maxY, rawY));
 
       setStars((prev) =>
         prev.map((star) =>
@@ -159,14 +187,41 @@ function Constellation() {
     });
   };
 
-  const handleSvgMouseUp = () => {
-    setDragState((current) => {
-      if (current && current.hasMoved) {
-        // Persist new star positions to localStorage only when a drag finishes
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(stars));
-      }
-      return null;
-    });
+  const endDrag = () => {
+    setDragState(() => null);
+  };
+
+  const handleStarMouseDown = (
+    event: ReactMouseEvent<SVGGElement>,
+    starId: StarId,
+  ) => {
+    event.preventDefault();
+    startDrag(event.clientX, event.clientY, starId);
+  };
+
+  const handleStarTouchStart = (
+    event: ReactTouchEvent<SVGGElement>,
+    starId: StarId,
+  ) => {
+    event.preventDefault();
+    const touch = event.touches[0];
+    if (!touch) return;
+    startDrag(touch.clientX, touch.clientY, starId);
+  };
+
+  const handleSvgMouseMove = (event: ReactMouseEvent<SVGSVGElement>) => {
+    moveDrag(event.clientX, event.clientY);
+  };
+
+  const handleSvgTouchMove = (event: ReactTouchEvent<SVGSVGElement>) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    event.preventDefault();
+    moveDrag(touch.clientX, touch.clientY);
+  };
+
+  const handleSvgPointerUp = () => {
+    endDrag();
   };
 
   const handleStarMouseUp = (route: string) => {
@@ -180,6 +235,81 @@ function Constellation() {
 
   const starById = new Map<StarId, StarConfig>(stars.map((s) => [s.id, s]));
 
+  const handleResetLayout = () => {
+    setStars(INITIAL_STARS);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.warn("Failed to clear constellation state:", e);
+    }
+    setDragState(null);
+  };
+
+  const handleSaveLayout = () => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stars));
+    } catch (e) {
+      console.warn("Failed to save constellation state:", e);
+    }
+  };
+
+  // Dynamically compute lightweight connections by linking each star to its
+  // nearest neighbour. This adapts as stars are dragged around and helps avoid
+  // heavy line overlap while keeping the graph visually connected.
+  const dynamicConnections: Connection[] = useMemo(() => {
+    if (stars.length < 2) return [];
+
+    const edges = new Set<string>();
+
+    for (let i = 0; i < stars.length; i++) {
+      const from = stars[i];
+      let nearestIndex = -1;
+      let nearestDist = Infinity;
+
+      for (let j = 0; j < stars.length; j++) {
+        if (i === j) continue;
+        const to = stars[j];
+        const dx = from.x - to.x;
+        const dy = from.y - to.y;
+        const dist = dx * dx + dy * dy;
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestIndex = j;
+        }
+      }
+
+      if (nearestIndex !== -1) {
+        const to = stars[nearestIndex];
+        const a = from.id;
+        const b = to.id;
+        const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+        edges.add(key);
+      }
+    }
+
+    return Array.from(edges).map((key) => {
+      const [a, b] = key.split("-") as StarId[];
+      return { from: a, to: b };
+    });
+  }, [stars]);
+
+  // For the untouched, default layout, show the full base constellation so the
+  // initial experience feels intentional and richly connected. As soon as the
+  // user moves any star, switch to the dynamic distance-based connections.
+  const isDefaultLayout = useMemo(() => {
+    if (stars.length !== INITIAL_STARS.length) return false;
+    return INITIAL_STARS.every((base) => {
+      const current = stars.find((s) => s.id === base.id);
+      if (!current) return false;
+      const dx = Math.abs(current.x - base.x);
+      const dy = Math.abs(current.y - base.y);
+      // Small tolerance in case of minor floating point differences.
+      return dx < 0.1 && dy < 0.1;
+    });
+  }, [stars]);
+
+  const connectionsToRender = isDefaultLayout ? BASE_CONNECTIONS : dynamicConnections;
+
   return (
     <section
       className="constellation-section"
@@ -188,13 +318,16 @@ function Constellation() {
       <div className="constellation-container">
         <svg
           className="constellation-svg"
-          viewBox="0 0 100 60"
+          viewBox="0 0 100 80"
           role="img"
           aria-label="Interactive constellation of CurioCodex features"
           ref={svgRef}
           onMouseMove={handleSvgMouseMove}
-          onMouseUp={handleSvgMouseUp}
-          onMouseLeave={handleSvgMouseUp}
+          onMouseUp={handleSvgPointerUp}
+          onMouseLeave={handleSvgPointerUp}
+          onTouchMove={handleSvgTouchMove}
+          onTouchEnd={handleSvgPointerUp}
+          onTouchCancel={handleSvgPointerUp}
         >
           <defs>
             <radialGradient id="star-core" cx="50%" cy="50%" r="50%">
@@ -214,7 +347,7 @@ function Constellation() {
             </filter>
           </defs>
 
-          {CONNECTIONS.map((connection, index) => {
+          {connectionsToRender.map((connection, index) => {
             const from = starById.get(connection.from);
             const to = starById.get(connection.to);
             if (!from || !to) return null;
@@ -237,7 +370,9 @@ function Constellation() {
               className="constellation-star"
               transform={`translate(${star.x}, ${star.y})`}
               onMouseDown={(event) => handleStarMouseDown(event, star.id)}
+              onTouchStart={(event) => handleStarTouchStart(event, star.id)}
               onMouseUp={() => handleStarMouseUp(star.route)}
+              onTouchEnd={() => handleStarMouseUp(star.route)}
               onKeyDown={(event) => handleKeyDown(event, star.route)}
               tabIndex={0}
               role="button"
@@ -245,16 +380,16 @@ function Constellation() {
             >
               <circle
                 className="constellation-star-glow"
-                r={4.5}
+                r={4.5 * starScale}
                 fill="url(#star-glow)"
                 filter="url(#soft-glow)"
               />
               <circle
                 className="constellation-star-core"
-                r={1.4}
+                r={1.4 * starScale}
                 fill="url(#star-core)"
               />
-              <circle className="constellation-star-outline" r={2.4} />
+              <circle className="constellation-star-outline" r={2.4 * starScale} />
               <text
                 className="constellation-star-label"
                 x={0}
@@ -266,6 +401,25 @@ function Constellation() {
             </g>
           ))}
         </svg>
+
+        <div className="constellation-controls">
+          <button
+            type="button"
+            className="constellation-control-button constellation-control-reset"
+            aria-label="Reset star layout"
+            onClick={handleResetLayout}
+          >
+            <span className="constellation-control-button-icon">⟳</span>
+          </button>
+          <button
+            type="button"
+            className="constellation-control-button constellation-control-save"
+            aria-label="Save star layout"
+            onClick={handleSaveLayout}
+          >
+            <span className="constellation-control-button-icon">💾</span>
+          </button>
+        </div>
       </div>
     </section>
   );

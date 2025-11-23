@@ -24,6 +24,22 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  /* Hide default scrollbars while keeping scroll behavior */
+  scrollbar-width: none; /* Firefox */
+}
+
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+html {
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 #root {

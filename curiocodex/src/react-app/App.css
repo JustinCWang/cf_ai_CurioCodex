@@ -51,6 +51,11 @@
   flex: 0 0 auto;
 }
 
+.brand-link {
+  text-decoration: none;
+  color: inherit;
+}
+
 .brand-mark {
   width: 30px;
   height: 30px;
@@ -98,7 +103,56 @@
   justify-content: center;
   flex: 1 1 auto;
   min-width: 0;
-  overflow-x: auto;
+}
+
+.header-links {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.header-center-trigger {
+  display: none;
+  margin-left: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 130, 220, 0.5);
+  background: rgba(12, 16, 40, 0.9);
+  color: #a9a9cf;
+  cursor: pointer;
+  font-size: 1.05rem;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.header-center-trigger:hover {
+  color: #ffffff;
+  border-color: rgba(147, 112, 219, 0.9);
+  background: rgba(22, 28, 70, 0.95);
+  box-shadow: 0 0 10px rgba(147, 112, 219, 0.5);
+}
+
+.header-center-menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.6rem 0.8rem;
+  background: rgba(10, 12, 35, 0.96);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(147, 112, 219, 0.65);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.75);
+  z-index: 30;
+  width: min(260px, calc(100vw - 2.5rem));
+}
+
+.header-center-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .header-nav-link {
@@ -133,6 +187,8 @@
 .header-right {
   margin-left: 0.25rem;
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
 }
 
 @media (max-width: 900px) {
@@ -148,6 +204,20 @@
   .header-center {
     font-size: 0.72rem;
     letter-spacing: 0.06em;
+    position: relative;
+  }
+}
+
+/* Medium screens: hide inline links and use center dropdown instead */
+@media (max-width: 900px) and (min-width: 769px) {
+  .header-links {
+    display: none;
+  }
+
+  .header-center-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 
@@ -247,6 +317,10 @@
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+  .header-center {
+    display: none;
+  }
+
   .title {
     font-size: 2.5rem;
   }

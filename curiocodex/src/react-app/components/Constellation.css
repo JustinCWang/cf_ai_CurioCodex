@@ -2,18 +2,23 @@
 
 .constellation-section {
   width: 100%;
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
+  height: 100%;
 }
 
 .constellation-container {
   position: relative;
-  border-radius: 0;
-  padding: 0;
+  border-radius: 18px;
+  padding: 0.75rem;
   background: transparent;
   border: none;
   box-shadow: none;
   backdrop-filter: none;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .constellation-container::before {
@@ -22,8 +27,66 @@
 
 .constellation-svg {
   display: block;
-  width: 100%;
-  height: auto;
+  max-width: 100%;
+  height: 100%;
+  width: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.constellation-controls {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 0.75rem;
+  pointer-events: none; /* let only buttons receive events */
+}
+
+.constellation-control-button {
+  pointer-events: auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 255, 0.7);
+  background: radial-gradient(circle at 30% 20%, #111827, #1f2937 55%, #020617 100%);
+  box-shadow:
+    0 0 10px rgba(15, 23, 42, 0.9),
+    0 6px 18px rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e5e7eb;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.constellation-control-button:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 14px rgba(129, 140, 248, 0.8),
+    0 10px 24px rgba(0, 0, 0, 0.85);
+}
+
+.constellation-control-button:focus-visible {
+  outline: 2px solid rgba(196, 181, 253, 0.9);
+  outline-offset: 2px;
+}
+
+.constellation-control-reset {
+  border-color: rgba(248, 113, 113, 0.9);
+}
+
+.constellation-control-save {
+  border-color: rgba(52, 211, 153, 0.9);
+}
+
+.constellation-control-button-icon {
+  pointer-events: none;
 }
 
 .constellation-line {
@@ -127,7 +190,13 @@
 @media (max-width: 900px) {
   .constellation-section {
     max-width: 100%;
-    padding-inline: 0.25rem;
+    padding-inline: 0.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .constellation-star-label {
+    font-size: 3.2px;
   }
 }
 

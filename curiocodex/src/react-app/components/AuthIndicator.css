@@ -5,7 +5,18 @@
 .auth-indicator {
   display: flex;
   align-items: center;
+}
+
+.auth-desktop {
+  display: flex;
+  align-items: center;
   gap: 0.6rem;
+}
+
+.auth-mobile {
+  display: none;
+  position: relative;
+  margin-left: 0.35rem;
 }
 
 .user-info {
@@ -61,22 +72,87 @@
   box-shadow: 0 0 12px rgba(220, 53, 69, 0.6);
 }
 
+.auth-trigger {
+  background: transparent;
+  border-radius: 999px;
+  border: 1px solid rgba(147, 112, 219, 0.7);
+  padding: 0.25rem 0.55rem;
+  color: #e5e5ff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-trigger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 12px rgba(147, 112, 219, 0.6);
+  background: rgba(18, 20, 60, 0.9);
+}
+
+.auth-menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem 0.8rem;
+  min-width: 190px;
+  max-width: min(260px, 100vw - 2.5rem);
+  background: rgba(10, 12, 35, 0.96);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(147, 112, 219, 0.65);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.75);
+  z-index: 40;
+}
+
+.auth-menu-link {
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  color: #e5e5ff;
+  font-size: 0.82rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.auth-menu-link:hover {
+  border-color: rgba(147, 112, 219, 0.75);
+  background: rgba(18, 20, 60, 0.9);
+}
+
+.auth-menu-link.active {
+  border-color: rgba(212, 175, 55, 0.9);
+  background: radial-gradient(circle at 20% 20%, #ffd27f, #ba55d3 70%);
+  box-shadow:
+    0 0 12px rgba(212, 175, 55, 0.6),
+    0 0 18px rgba(147, 112, 219, 0.7);
+}
+
+.auth-menu-logout {
+  width: 100%;
+  text-align: center;
+  margin-top: 0.15rem;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
-  .auth-indicator {
-    gap: 0.5rem;
+  .auth-desktop {
+    display: none;
   }
-  
+
+  .auth-mobile {
+    display: flex;
+  }
+
   .user-info {
     font-size: 0.78rem;
   }
-  
-  .username {
-    display: none; /* Hide username on very small screens to save space */
-  }
-  
-  .login-button,
-  .logout-button {
+
+  .login-button {
     padding: 0.3rem 0.7rem;
     font-size: 0.78rem;
   }
