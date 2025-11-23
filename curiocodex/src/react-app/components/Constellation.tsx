@@ -49,11 +49,11 @@ type DragState = {
 // Initial coordinates for the constellation (normalized to the SVG viewBox).
 // Default ViewBox: 0..100 (x), 0..80 (y).
 const INITIAL_STARS: StarConfig[] = [
-  { id: "dashboard", label: "Atlas", x: 56.95067264573992, y: 36.20938628158841, route: "/" },
+  { id: "dashboard", label: "Atlas", x: 58.82627344865302, y: 39.69262678180379, route: "/" },
   { id: "settings", label: "Settings", x: 87.4439461883408, y: 31.25992779783394, route: "/settings" },
-  { id: "discover", label: "Discover", x: 35.22869955156952, y: 49.74729241877257, route: "/discover" },
+  { id: "discover", label: "Discover", x: 39.1585298052922, y: 32.8669730715749, route: "/discover" },
   { id: "items", label: "Items", x: 16.618834080717498, y: 40.14440433212996, route: "/items" },
-  { id: "add", label: "Add", x: 46.86098654708521, y: 73, route: "/add" },
+  { id: "add", label: "Add", x: 40.341040898863504, y: 56.20899451178222, route: "/add" },
   { id: "activity", label: "Activity", x: 75.26905829596413, y: 58.19494584837544, route: "/activity" },
   { id: "hobbies", label: "Hobbies", x: 19.704035874439473, y: 13.931407942238266, route: "/hobbies" },
 ];
@@ -62,11 +62,10 @@ const INITIAL_STARS: StarConfig[] = [
 const BASE_CONNECTIONS: Connection[] = [
   { from: "dashboard", to: "discover" },
   { from: "dashboard", to: "activity" },
+  { from: "dashboard", to: "settings" },
   { from: "hobbies", to: "items" },
   { from: "items", to: "discover" },
   { from: "discover", to: "add" },
-  { from: "discover", to: "dashboard"},
-  { from: "activity", to: "settings"}
 ];
 
 function Constellation() {
