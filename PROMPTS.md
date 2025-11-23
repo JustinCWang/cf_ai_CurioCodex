@@ -39,3 +39,5 @@ Can you help me clean up my UI and Debugging tools? I want to move some things a
 Can you help me clean up my code, I've attached the context for files that I think need to be further componentized or lack my commenting style. Can you go through and add/update/fix comments to be in my style that sufficiently explain the code and componentize the pages that I have attached?
 
 Can you help style and fix the CSS of the the constellation so that it scales on all screen sizes, but doesn't get cut off while dragging it. Also whatever code you change, make sure to tell me where you put the number to scale the stars based on screen size, css padding and scaling dimensions in which file, and any other hyperparameters so I can tune it myself. 
+
+I have implemented some logic for the activity page to show the recent activity of the user. Can you help me integrate it into the frontend using a similar styling as the rest of the app?

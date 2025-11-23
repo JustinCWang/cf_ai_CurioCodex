@@ -1,6 +1,6 @@
 /**
  * Generic view toggle control used by collection pages.
- * Renders three radio-style buttons for "card", "list", and "icon" layouts.
+ * Renders radio-style buttons for "card", "list", and optionally "icon" layouts.
  */
 
 type ViewMode = "card" | "list" | "icon";
@@ -20,9 +20,17 @@ interface ViewToggleProps {
   ariaLabel: string;
   /** Optional custom labels for each view mode (defaults are Card/List/Icon). */
   labels?: ViewToggleLabels;
+  /** Whether to show the icon/compact view option (defaults to true). */
+  showIcon?: boolean;
 }
 
-function ViewToggle({ mode, onChange, ariaLabel, labels }: ViewToggleProps) {
+function ViewToggle({
+  mode,
+  onChange,
+  ariaLabel,
+  labels,
+  showIcon = true,
+}: ViewToggleProps) {
   const effectiveLabels: Required<ViewToggleLabels> = {
     card: labels?.card ?? "Card",
     list: labels?.list ?? "List",
@@ -57,16 +65,18 @@ function ViewToggle({ mode, onChange, ariaLabel, labels }: ViewToggleProps) {
         <span className="view-toggle-label">{effectiveLabels.list}</span>
       </button>
 
-      <button
-        type="button"
-        className={`view-toggle-button ${mode === "icon" ? "active" : ""}`}
-        onClick={() => onChange("icon")}
-        role="radio"
-        aria-checked={mode === "icon"}
-      >
-        <span className="view-toggle-icon">🔳</span>
-        <span className="view-toggle-label">{effectiveLabels.icon}</span>
-      </button>
+      {showIcon && (
+        <button
+          type="button"
+          className={`view-toggle-button ${mode === "icon" ? "active" : ""}`}
+          onClick={() => onChange("icon")}
+          role="radio"
+          aria-checked={mode === "icon"}
+        >
+          <span className="view-toggle-icon">🔳</span>
+          <span className="view-toggle-label">{effectiveLabels.icon}</span>
+        </button>
+      )}
     </div>
   );
 }

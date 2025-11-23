@@ -1650,6 +1650,135 @@ app.post("/api/discover/recommendations", async (c) => {
 });
 
 /**
+ * GET /api/activity/recent
+ * Get a combined, reverse-chronological feed of the user's recent activity.
+ * Currently includes:
+ * - Newly created hobbies
+ * - Newly created items (including those created via bulk import)
+ */
+app.get("/api/activity/recent", async (c) => {
+  const user = c.get("user");
+
+  try {
+    const url = new URL(c.req.url);
+    const pageParam = url.searchParams.get("page");
+    const pageSizeParam = url.searchParams.get("pageSize");
+
+    let page = parseInt(pageParam || "1", 10);
+    if (isNaN(page) || page < 1) {
+      page = 1;
+    }
+
+    let pageSize = parseInt(pageSizeParam || "20", 10);
+    if (isNaN(pageSize) || pageSize < 5) {
+      pageSize = 5;
+    }
+    if (pageSize > 50) {
+      pageSize = 50;
+    }
+
+    // Fetch recent hobbies for this user
+    const hobbies = await c.env.DB.prepare(
+      "SELECT id, name, description, category, tags, created_at FROM hobbies WHERE user_id = ?"
+    )
+      .bind(user.userId)
+      .all<HobbyRow>();
+
+    // Fetch recent items that belong to this user's hobbies
+    const items = await c.env.DB.prepare(
+      `SELECT i.id, i.name, i.description, i.category, i.tags, i.created_at, i.hobby_id, h.name as hobby_name
+       FROM items i
+       INNER JOIN hobbies h ON i.hobby_id = h.id
+       WHERE h.user_id = ?
+      `
+    )
+      .bind(user.userId)
+      .all<ItemRow & { hobby_id: string; hobby_name: string }>();
+
+    type ActivityEvent =
+      | {
+          id: string;
+          type: "hobby_created";
+          created_at: number;
+          hobby: {
+            id: string;
+            name: string;
+            description: string | null;
+            category: string | null;
+            tags: string[];
+          };
+        }
+      | {
+          id: string;
+          type: "item_created";
+          created_at: number;
+          hobby: {
+            id: string;
+            name: string;
+          };
+          item: {
+            id: string;
+            name: string;
+            description: string | null;
+            category: string | null;
+            tags: string[];
+          };
+        };
+
+    const hobbyEvents: ActivityEvent[] = hobbies.results.map((hobby) => ({
+      id: hobby.id,
+      type: "hobby_created",
+      created_at: hobby.created_at,
+      hobby: {
+        id: hobby.id,
+        name: hobby.name,
+        description: hobby.description,
+        category: hobby.category,
+        tags: hobby.tags ? (JSON.parse(hobby.tags) as string[]) : [],
+      },
+    }));
+
+    const itemEvents: ActivityEvent[] = items.results.map((item) => ({
+      id: item.id,
+      type: "item_created",
+      created_at: item.created_at,
+      hobby: {
+        id: item.hobby_id,
+        name: item.hobby_name,
+      },
+      item: {
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        category: item.category,
+        tags: item.tags ? (JSON.parse(item.tags) as string[]) : [],
+      },
+    }));
+
+    const allEvents = [...hobbyEvents, ...itemEvents].sort(
+      (a, b) => b.created_at - a.created_at
+    );
+
+    const total = allEvents.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const start = (safePage - 1) * pageSize;
+    const pagedEvents = allEvents.slice(start, start + pageSize);
+
+    return c.json({
+      events: pagedEvents,
+      page: safePage,
+      pageSize,
+      total,
+      totalPages,
+    });
+  } catch (error) {
+    console.error("Error fetching recent activity:", error);
+    return c.json({ error: "Failed to fetch recent activity" }, 500);
+  }
+});
+
+/**
  * GET /api/discover/by-category/:category
  * Get hobbies/items by category.
  */
