@@ -36,7 +36,7 @@ function Hobbies() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [selectedHobby, setSelectedHobby] = useState<Hobby | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchMode, setSearchMode] = useState<"semantic" | "text">("semantic");
+  const [searchMode] = useState<"semantic" | "text">("text");
   const [searchResults, setSearchResults] = useState<SearchHobbyResult[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -264,32 +264,8 @@ function Hobbies() {
           </Link>
         </div>
 
-        {/* Hobby search (semantic / text) */}
+        {/* Hobby search (text-based) */}
         <form onSubmit={handleHobbySearch} className="hobbies-search-form">
-          <div className="hobbies-search-mode-toggle">
-            <button
-              type="button"
-              className={`mode-button ${searchMode === "semantic" ? "active" : ""}`}
-              onClick={() => setSearchMode("semantic")}
-              disabled={searchLoading}
-            >
-              🧠 Semantic
-            </button>
-            <button
-              type="button"
-              className={`mode-button ${searchMode === "text" ? "active" : ""}`}
-              onClick={() => setSearchMode("text")}
-              disabled={searchLoading}
-            >
-              🔤 Text
-            </button>
-            <span className="mode-help">
-              {searchMode === "semantic"
-                ? "AI-powered search by meaning (falls back to text if needed)."
-                : "Simple keyword search only."}
-            </span>
-          </div>
-
           <div className="hobbies-search-input-container">
             <input
               type="text"

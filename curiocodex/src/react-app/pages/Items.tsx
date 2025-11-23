@@ -57,7 +57,8 @@ function Items() {
   const [viewMode, setViewMode] = useState<"card" | "list" | "icon">("card");
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchMode, setSearchMode] = useState<"semantic" | "text">("semantic");
+  // Text-based search only for items; semantic search lives on the Discover page.
+  const [searchMode] = useState<"semantic" | "text">("text");
   const [searchItems, setSearchItems] = useState<SearchItem[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
@@ -473,32 +474,8 @@ function Items() {
           </Link>
         </div>
 
-        {/* Item search (semantic / text) */}
+        {/* Item search (text-based) */}
         <form onSubmit={handleItemSearch} className="items-search-form">
-          <div className="items-search-mode-toggle">
-            <button
-              type="button"
-              className={`mode-button ${searchMode === "semantic" ? "active" : ""}`}
-              onClick={() => setSearchMode("semantic")}
-              disabled={searchLoading}
-            >
-              🧠 Semantic
-            </button>
-            <button
-              type="button"
-              className={`mode-button ${searchMode === "text" ? "active" : ""}`}
-              onClick={() => setSearchMode("text")}
-              disabled={searchLoading}
-            >
-              🔤 Text
-            </button>
-            <span className="mode-help">
-              {searchMode === "semantic"
-                ? "AI-powered search by meaning (falls back to text if needed)."
-                : "Simple keyword search only."}
-            </span>
-          </div>
-
           <div className="items-search-input-container">
             <input
               type="text"

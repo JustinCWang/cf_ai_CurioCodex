@@ -7,6 +7,24 @@ import { useAuth } from "../hooks/useAuth";
 import { apiRequest, parseResponse } from "../utils/api";
 import "./Discover.css";
 
+interface SearchResult {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  tags: string[];
+  created_at: number;
+  type: "hobby" | "item";
+  similarity?: number;
+  hobby_id?: string;
+}
+
+interface SearchResponse {
+  hobbies: SearchResult[];
+  items: SearchResult[];
+  searchMethod: "semantic" | "text";
+}
+
 interface RecommendationItem {
   id: string;
   name: string;
@@ -30,6 +48,14 @@ interface Hobby {
 }
 
 function Discover() {
+  // Semantic search state (Discover only)
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searchMethod, setSearchMethod] = useState<"semantic" | "text" | null>(null);
+
   // Recommendations state
   const [recommendationQuery, setRecommendationQuery] = useState("");
   const [recommendations, setRecommendations] = useState<RecommendationItem[]>([]);
@@ -41,6 +67,49 @@ function Discover() {
   const [addingItem, setAddingItem] = useState(false);
   
   const { token, isAuthenticated } = useAuth();
+
+  const handleSearch = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!searchQuery.trim()) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      setHasSearched(true);
+
+      const response = await apiRequest(
+        "/api/search",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            query: searchQuery.trim(),
+            limit: 20,
+            mode: "semantic",
+          }),
+        },
+        token
+      );
+
+      const data = await parseResponse<SearchResponse>(response);
+      setSearchResults(data);
+      setSearchMethod(data.searchMethod);
+    } catch (err) {
+      console.error("Error searching:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to perform search";
+      setError(errorMessage);
+      setSearchResults(null);
+      setSearchMethod(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery, token]);
+
+  const totalResults = searchResults 
+    ? searchResults.hobbies.length + searchResults.items.length 
+    : 0;
 
   // Fetch user's hobbies for the "Add to hobby" modal
   useEffect(() => {
@@ -139,11 +208,142 @@ function Discover() {
       <h1>Discover</h1>
       <div className="page-content">
         <div className="discover-header">
-          <p>Get AI-powered item recommendations based on your hobbies and interests.</p>
+          <p>Search your collection semantically and get AI-powered recommendations.</p>
           <p className="discover-hint">
-            Describe what you&apos;re in the mood for, or leave it blank to use your existing hobbies.
+            Use natural language to explore your hobbies and items, then discover new things based on your interests.
           </p>
         </div>
+
+        {/* Semantic Search Section */}
+        <form onSubmit={handleSearch} className="search-form">
+          <div className="search-input-container">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search your hobbies and items with natural language (semantic search)..."
+              className="search-input"
+              disabled={loading}
+            />
+            <button type="submit" className="search-button" disabled={loading || !searchQuery.trim()}>
+              {loading ? "🔍 Searching..." : "🔍 Semantic Search"}
+            </button>
+          </div>
+        </form>
+
+        {error && <div className="error-message">{error}</div>}
+
+        {/* Search Results */}
+        {hasSearched && !loading && (
+          <>
+            {totalResults === 0 ? (
+              <div className="empty-state">
+                <p className="empty-message">🔍 No results found</p>
+                <p className="empty-hint">
+                  Try a different search query or check your spelling.
+                </p>
+              </div>
+            ) : (
+              <div className="search-results">
+                <div className="results-header">
+                  <div>
+                    <h2>Semantic Search Results</h2>
+                    {searchMethod && (
+                      <p className="results-count">
+                        Using {searchMethod === "semantic" ? "semantic (vector)" : "text"} search
+                      </p>
+                    )}
+                  </div>
+                  <span className="results-count">
+                    Found {totalResults} result{totalResults !== 1 ? "s" : ""}
+                  </span>
+                </div>
+
+                {/* Hobbies Section */}
+                {searchResults && searchResults.hobbies.length > 0 && (
+                  <div className="results-section">
+                    <h3 className="section-title">✨ Hobbies ({searchResults.hobbies.length})</h3>
+                    <div className="results-grid">
+                      {searchResults.hobbies.map((hobby) => (
+                        <div key={hobby.id} className="result-card hobby-card">
+                          <div className="card-glow"></div>
+                          {hobby.similarity !== undefined && (
+                            <div className="similarity-badge">
+                              {Math.round(hobby.similarity * 100)}% match
+                            </div>
+                          )}
+                          <h4>{hobby.name}</h4>
+                          {hobby.description && (
+                            <p className="card-description">{hobby.description}</p>
+                          )}
+                          {hobby.category && (
+                            <div className="card-category">
+                              <span className="category-label">Category:</span>
+                              <span className="category-value">{hobby.category}</span>
+                            </div>
+                          )}
+                          {hobby.tags && hobby.tags.length > 0 && (
+                            <div className="card-tags">
+                              {hobby.tags.slice(0, 2).map((tag, index) => (
+                                <span key={index} className="tag">
+                                  #{tag}
+                                </span>
+                              ))}
+                              {hobby.tags.length > 2 && (
+                                <span className="tag more-tag">+{hobby.tags.length - 2} tags</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Items Section */}
+                {searchResults && searchResults.items.length > 0 && (
+                  <div className="results-section">
+                    <h3 className="section-title">📦 Items ({searchResults.items.length})</h3>
+                    <div className="results-grid">
+                      {searchResults.items.map((item) => (
+                        <div key={item.id} className="result-card item-card">
+                          <div className="card-glow"></div>
+                          {item.similarity !== undefined && (
+                            <div className="similarity-badge">
+                              {Math.round(item.similarity * 100)}% match
+                            </div>
+                          )}
+                          <h4>{item.name}</h4>
+                          {item.description && (
+                            <p className="card-description">{item.description}</p>
+                          )}
+                          {item.category && (
+                            <div className="card-category">
+                              <span className="category-label">Category:</span>
+                              <span className="category-value">{item.category}</span>
+                            </div>
+                          )}
+                          {item.tags && item.tags.length > 0 && (
+                            <div className="card-tags">
+                              {item.tags.slice(0, 2).map((tag, index) => (
+                                <span key={index} className="tag">
+                                  #{tag}
+                                </span>
+                              ))}
+                              {item.tags.length > 2 && (
+                                <span className="tag more-tag">+{item.tags.length - 2} tags</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
 
         {/* Recommendations Section */}
         <div className="recommendations-section">
