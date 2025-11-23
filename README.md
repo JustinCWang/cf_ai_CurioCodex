@@ -120,6 +120,7 @@ SQL migrations for the `curiocodex-db` D1 database live in `curiocodex/migration
 - `0001_initial.sql`
 - `0002_add_ai_fields.sql`
 - `0003_add_item_images.sql`
+- `0004_hobby_item_categories.sql`
 
 To apply them to your D1 instance, use `wrangler d1` (replace the database name/ID if needed):
 
