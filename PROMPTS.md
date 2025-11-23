@@ -35,3 +35,6 @@ I modified some styling and added a picture I got that I want to use as the back
 I want to make the constellation UI interactive and allow users to move each star around how they like. What imports would I need and what are the basics of detecting user mouse input?
 
 Can you help me clean up my UI and Debugging tools? I want to move some things around and reformat a few inconsistencies. I need to move the search feature from the discover page to the item & hobby pages. We should update the backend and frontend. 
+
+Can you help me clean up my code, I've attached the context for files that I think need to be further componentized or lack my commenting style. Can you go through and add/update/fix comments to be in my style that sufficiently explain the code and componentize the pages that I have attached?
+

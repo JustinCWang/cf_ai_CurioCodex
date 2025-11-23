@@ -81,6 +81,10 @@ interface CreatedItemPayload {
   image_url: string | null;
 }
 
+/**
+ * Core helper to create a single item record with AI-enhanced fields.
+ * Handles description generation, categorization, tagging, DB insert, and Vectorize upsert.
+ */
 async function createItemCore(
   c: AppContext,
   options: CreateItemCoreOptions
@@ -1666,6 +1670,10 @@ app.get("/api/discover/by-category/:category", async (c) => {
   return c.json({ hobbies: hobbiesWithParsedTags });
 });
 
+/**
+ * Shared handler for collection search endpoints.
+ * Supports semantic (Vectorize + embeddings) and plain text search across a user's hobbies and items.
+ */
 async function handleCollectionSearch(c: AppContext) {
   const user = c.get("user");
   const { query, limit = 20, mode } = await c.req.json<{

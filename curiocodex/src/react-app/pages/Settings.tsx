@@ -14,6 +14,11 @@ function Settings() {
     message: string;
   } | null>(null);
 
+  /**
+   * Call the admin endpoint to rebuild Vectorize metadata for all of the
+   * current user's hobbies and items, fixing cases where semantic search
+   * falls back to plain text due to missing metadata.
+   */
   const handleRepairVectors = async () => {
     if (!token) {
       setRepairResult({

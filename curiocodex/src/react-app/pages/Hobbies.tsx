@@ -1,5 +1,6 @@
 /**
  * Hobbies page - Browse and manage all hobbies.
+ * Handles search, layout toggles, and inline editing of a user's hobbies.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -7,6 +8,9 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiRequest, parseResponse } from "../utils/api";
 import { CATEGORIES } from "../utils/categories";
+import ViewToggle from "../components/ViewToggle";
+import HobbyDetailsModal from "../components/HobbyDetailsModal";
+import ConfirmModal from "../components/ConfirmModal";
 import "./Hobbies.css";
 
 interface Hobby {
@@ -259,7 +263,7 @@ function Hobbies() {
       <div className="page-content">
         <div className="hobbies-header">
           <p>Explore your collection of hobbies and curiosities.</p>
-          <Link to="/add" className="add-link-button">
+          <Link to="/add/hobby" className="add-link-button">
             ✨ Add New Hobby
           </Link>
         </div>
@@ -313,55 +317,18 @@ function Hobbies() {
           <div className="empty-state">
             <p className="empty-message">✨ No hobbies yet! ✨</p>
             <p className="empty-hint">Start your collection by adding your first hobby.</p>
-            <Link to="/add" className="add-link-button">
+            <Link to="/add/hobby" className="add-link-button">
               Add Your First Hobby
             </Link>
           </div>
         ) : (
           <>
             <div className="hobbies-toolbar">
-              <div
-                className="hobbies-view-toggle"
-                role="radiogroup"
-                aria-label="Change hobby layout"
-              >
-                <button
-                  type="button"
-                  className={`view-toggle-button ${
-                    viewMode === "card" ? "active" : ""
-                  }`}
-                  onClick={() => setViewMode("card")}
-                  role="radio"
-                  aria-checked={viewMode === "card"}
-                >
-                  <span className="view-toggle-icon">🧊</span>
-                  <span className="view-toggle-label">Card</span>
-                </button>
-                <button
-                  type="button"
-                  className={`view-toggle-button ${
-                    viewMode === "list" ? "active" : ""
-                  }`}
-                  onClick={() => setViewMode("list")}
-                  role="radio"
-                  aria-checked={viewMode === "list"}
-                >
-                  <span className="view-toggle-icon">📄</span>
-                  <span className="view-toggle-label">List</span>
-                </button>
-                <button
-                  type="button"
-                  className={`view-toggle-button ${
-                    viewMode === "icon" ? "active" : ""
-                  }`}
-                  onClick={() => setViewMode("icon")}
-                  role="radio"
-                  aria-checked={viewMode === "icon"}
-                >
-                  <span className="view-toggle-icon">🔳</span>
-                  <span className="view-toggle-label">Icon</span>
-                </button>
-              </div>
+              <ViewToggle
+                mode={viewMode}
+                onChange={setViewMode}
+                ariaLabel="Change hobby layout"
+              />
             </div>
 
             {isSearching && (
@@ -572,75 +539,14 @@ function Hobbies() {
 
             {/* Details Modal */}
             {selectedHobby && (
-              <div
-                className="modal-overlay"
-                onClick={() => setSelectedHobby(null)}
-              >
-                <div
-                  className="modal-content details-modal"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="details-header">
-                    <h2>{selectedHobby.name}</h2>
-                    <button
-                      className="close-button"
-                      onClick={() => setSelectedHobby(null)}
-                      aria-label="Close details"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  
-                  <div className="details-body">
-                    {selectedHobby.category && (
-                      <div className="detail-row">
-                        <span className="detail-label">Category</span>
-                        <span className="detail-value badge">
-                          {selectedHobby.category}
-                        </span>
-                      </div>
-                    )}
-                    
-                    <div className="detail-section">
-                      <h3>Description</h3>
-                      <p className="detail-description">
-                        {selectedHobby.description || "No description provided."}
-                      </p>
-                    </div>
-
-                    {selectedHobby.tags && selectedHobby.tags.length > 0 && (
-                      <div className="detail-section">
-                        <h3>Tags</h3>
-                        <div className="detail-tags">
-                          {selectedHobby.tags.map((tag, index) => (
-                            <span key={index} className="tag">
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="detail-actions">
-                      <Link
-                        to={`/hobbies/${selectedHobby.id}/items`}
-                        className="primary-action-button"
-                      >
-                        View All Items
-                      </Link>
-                      <button
-                        className="secondary-action-button"
-                        onClick={() => {
-                          handleEdit(selectedHobby);
-                          setSelectedHobby(null);
-                        }}
-                      >
-                        Edit Hobby
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <HobbyDetailsModal
+                hobby={selectedHobby}
+                onClose={() => setSelectedHobby(null)}
+                onEdit={() => {
+                  handleEdit(selectedHobby);
+                  setSelectedHobby(null);
+                }}
+              />
             )}
 
             {/* Edit Modal */}
@@ -817,23 +723,13 @@ function Hobbies() {
 
             {/* Delete Confirmation Modal */}
             {deleteConfirm && (
-              <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
-                <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
-                  <h2>Delete Hobby?</h2>
-                  <p>Are you sure you want to delete this hobby? This will also delete all associated items. This action cannot be undone.</p>
-                  <div className="modal-actions">
-                    <button className="cancel-button" onClick={() => setDeleteConfirm(null)}>
-                      Cancel
-                    </button>
-                    <button
-                      className="delete-confirm-button"
-                      onClick={() => handleDelete(deleteConfirm)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <ConfirmModal
+                title="Delete Hobby?"
+                message="Are you sure you want to delete this hobby? This will also delete all associated items. This action cannot be undone."
+                confirmLabel="Delete"
+                onCancel={() => setDeleteConfirm(null)}
+                onConfirm={() => handleDelete(deleteConfirm)}
+              />
             )}
           </>
         )}

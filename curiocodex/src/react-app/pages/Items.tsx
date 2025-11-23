@@ -1,11 +1,15 @@
 /**
- * Items page - View individual items within hobbies.
+ * Items page - View and manage individual items within hobbies.
+ * Supports grouping by hobby, search, filters, multiple layouts, and item editing.
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiRequest, parseResponse } from "../utils/api";
+import ViewToggle from "../components/ViewToggle";
+import ItemDetailsModal from "../components/ItemDetailsModal";
+import ConfirmModal from "../components/ConfirmModal";
 import "./Items.css";
 
 interface Hobby {
@@ -469,7 +473,7 @@ function Items() {
               ? `Browse items in "${activeHobby.name}".`
               : "Browse items across all your hobbies."}
           </p>
-          <Link to="/add" className="add-link-button">
+          <Link to="/add/item" className="add-link-button">
             📦 Add New Item
           </Link>
         </div>
@@ -567,47 +571,13 @@ function Items() {
               {filteredGroups.length !== 1 ? "s" : ""}
             </span>
           </div>
-          <div
-            className="items-view-toggle"
-            role="radiogroup"
-            aria-label="Change item layout"
-          >
-            <button
-              type="button"
-              className={`view-toggle-button ${
-                viewMode === "card" ? "active" : ""
-              }`}
-              onClick={() => setViewMode("card")}
-              role="radio"
-              aria-checked={viewMode === "card"}
-            >
-              <span className="view-toggle-icon">🧊</span>
-              <span className="view-toggle-label">Column</span>
-            </button>
-            <button
-              type="button"
-              className={`view-toggle-button ${
-                viewMode === "list" ? "active" : ""
-              }`}
-              onClick={() => setViewMode("list")}
-              role="radio"
-              aria-checked={viewMode === "list"}
-            >
-              <span className="view-toggle-icon">📄</span>
-              <span className="view-toggle-label">List</span>
-            </button>
-            <button
-              type="button"
-              className={`view-toggle-button ${
-                viewMode === "icon" ? "active" : ""
-              }`}
-              onClick={() => setViewMode("icon")}
-              role="radio"
-              aria-checked={viewMode === "icon"}
-            >
-              <span className="view-toggle-icon">🔳</span>
-              <span className="view-toggle-label">Icon</span>
-            </button>
+          <div className="items-view-toggle">
+            <ViewToggle
+              mode={viewMode}
+              onChange={setViewMode}
+              ariaLabel="Change item layout"
+              labels={{ card: "Column", list: "List", icon: "Icon" }}
+            />
           </div>
         </div>
 
@@ -615,7 +585,7 @@ function Items() {
           <div className="empty-state">
             <p className="empty-message">📦 No items yet! 📦</p>
             <p className="empty-hint">Start adding items to your hobbies.</p>
-            <Link to="/add" className="add-link-button">
+            <Link to="/add/item" className="add-link-button">
               Add Your First Item
             </Link>
           </div>
@@ -838,92 +808,25 @@ function Items() {
 
         {/* Details Modal */}
         {selectedItem && (
-          <div
-            className="modal-overlay"
-            onClick={() => setSelectedItem(null)}
-          >
-            <div
-              className="modal-content details-modal"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="details-header">
-                <h2>{selectedItem.name}</h2>
-                <button
-                  className="close-button"
-                  onClick={() => setSelectedItem(null)}
-                  aria-label="Close details"
-                >
-                  ×
-                </button>
-              </div>
+          <ItemDetailsModal
+            item={selectedItem}
+            onClose={() => setSelectedItem(null)}
+            onEdit={() => {
+              // Try to use hobby_id from the item first, then fall back to grouping lookup.
+              let hid = selectedItem.hobby_id;
+              if (!hid) {
+                const group = itemsByHobby.find((g) =>
+                  g.items.some((i) => i.id === selectedItem.id)
+                );
+                if (group) hid = group.hobby.id;
+              }
 
-              <div className="details-body">
-                {selectedItem.image_url && (
-                  <div className="detail-image-container">
-                    <img
-                      src={selectedItem.image_url}
-                      alt={selectedItem.name}
-                      className="detail-image"
-                    />
-                  </div>
-                )}
-
-                {selectedItem.category && (
-                  <div className="detail-row">
-                    <span className="detail-label">Category</span>
-                    <span className="detail-value badge">
-                      {selectedItem.category}
-                    </span>
-                  </div>
-                )}
-
-                <div className="detail-section">
-                  <h3>Description</h3>
-                  <p className="detail-description">
-                    {selectedItem.description || "No description provided."}
-                  </p>
-                </div>
-
-                {selectedItem.tags && selectedItem.tags.length > 0 && (
-                  <div className="detail-section">
-                    <h3>Tags</h3>
-                    <div className="detail-tags">
-                      {selectedItem.tags.map((tag, index) => (
-                        <span key={index} className="tag">
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="detail-actions">
-                  <button
-                    className="secondary-action-button"
-                    onClick={() => {
-                      // Note: In ItemsByHobby loop, we have group.hobby.id. 
-                      // But here we just have selectedItem which might not have hobby_id populated if it came from elsewhere, 
-                      // but in Items page we know the hobby context usually.
-                      // Actually, the Item interface has optional hobby_id.
-                      // Let's find the hobby id from the groups if needed.
-                      let hid = selectedItem.hobby_id;
-                      if (!hid) {
-                         const group = itemsByHobby.find(g => g.items.some(i => i.id === selectedItem.id));
-                         if (group) hid = group.hobby.id;
-                      }
-                      
-                      if (hid) {
-                        handleEdit(selectedItem, hid);
-                        setSelectedItem(null);
-                      }
-                    }}
-                  >
-                    Edit Item
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+              if (hid) {
+                handleEdit(selectedItem, hid);
+                setSelectedItem(null);
+              }
+            }}
+          />
         )}
 
         {/* Edit Modal */}
@@ -1016,23 +919,15 @@ function Items() {
 
         {/* Delete Confirmation Modal */}
         {deleteConfirm && (
-          <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
-            <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
-              <h2>Delete Item?</h2>
-              <p>Are you sure you want to delete this item? This action cannot be undone.</p>
-              <div className="modal-actions">
-                <button className="cancel-button" onClick={() => setDeleteConfirm(null)}>
-                  Cancel
-                </button>
-                <button
-                  className="delete-confirm-button"
-                  onClick={() => handleDelete(deleteConfirm.itemId, deleteConfirm.hobbyId)}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
+          <ConfirmModal
+            title="Delete Item?"
+            message="Are you sure you want to delete this item? This action cannot be undone."
+            confirmLabel="Delete"
+            onCancel={() => setDeleteConfirm(null)}
+            onConfirm={() =>
+              handleDelete(deleteConfirm.itemId, deleteConfirm.hobbyId)
+            }
+          />
         )}
       </div>
     </div>

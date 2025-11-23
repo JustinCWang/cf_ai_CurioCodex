@@ -68,6 +68,10 @@ function Discover() {
   
   const { token, isAuthenticated } = useAuth();
 
+  /**
+   * Submit handler for semantic collection search.
+   * Sends the free-form query to the backend and shows hobby/item matches.
+   */
   const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -127,6 +131,11 @@ function Discover() {
     }
   }, [isAuthenticated, token]);
 
+  /**
+   * Submit handler for cross-user recommendations.
+   * Asks the backend for items from other collectors that match the user's
+   * hobbies and optional natural-language query.
+   */
   const handleGetRecommendations = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -159,6 +168,10 @@ function Discover() {
     }
   }, [recommendationQuery, token]);
 
+  /**
+   * Persist a recommended item into one of the user's own hobbies by
+   * creating a new item that copies the recommendation's fields.
+   */
   const handleAddToHobby = async () => {
     if (!addToHobbyModal || !token) return;
 

@@ -10,6 +10,8 @@ import Dashboard from "./pages/Dashboard";
 import Hobbies from "./pages/Hobbies";
 import Items from "./pages/Items";
 import Add from "./pages/Add";
+import AddHobby from "./pages/AddHobby";
+import AddItem from "./pages/AddItem";
 import Discover from "./pages/Discover";
 import Activity from "./pages/Activity";
 import Settings from "./pages/Settings";
@@ -73,6 +75,8 @@ function App() {
               <Route path="/hobbies/:hobbyId/items" element={<Items />} />
               <Route path="/items" element={<Items />} />
               <Route path="/add" element={<Add />} />
+              <Route path="/add/hobby" element={<AddHobby />} />
+              <Route path="/add/item" element={<AddItem />} />
               <Route path="/discover" element={<Discover />} />
               <Route path="/activity" element={<Activity />} />
               <Route path="/settings" element={<Settings />} />

@@ -28,6 +28,11 @@ function Activity() {
   const [error, setError] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
 
+  /**
+   * Submit handler for the Activity page's "Get Ideas" form.
+   * Sends the natural-language query to the recommendations endpoint and
+   * displays suggested items from other users' collections.
+   */
   const handleRecommend = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
