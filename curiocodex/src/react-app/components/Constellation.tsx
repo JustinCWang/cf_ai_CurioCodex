@@ -47,7 +47,7 @@ type DragState = {
 };
 
 // Initial coordinates for the constellation (normalized to the SVG viewBox).
-// ViewBox: 0..100 (x), 0..80 (y)
+// Default ViewBox: 0..100 (x), 0..80 (y).
 const INITIAL_STARS: StarConfig[] = [
   { id: "dashboard", label: "Atlas", x: 56.95067264573992, y: 36.20938628158841, route: "/" },
   { id: "settings", label: "Settings", x: 87.4439461883408, y: 31.25992779783394, route: "/settings" },
@@ -83,43 +83,66 @@ function Constellation() {
   });
   const [, setDragState] = useState<DragState | null>(null);
   const [starScale, setStarScale] = useState(1);
-  const svgRef = useRef<SVGSVGElement | null>(null);
-  const navigate = useNavigate();
-
-  // Keep stars comfortably away from the very edge of the SVG so labels
-  // don't get visually clipped when dragged near the border, while still
-  // allowing a generous vertical and horizontal movement range.
-  const DRAG_BOUNDS = {
+  const [viewBoxHeight, setViewBoxHeight] = useState(80);
+  const [dragBounds, setDragBounds] = useState({
     minX: 5,
     maxX: 95,
     minY: 7,
     maxY: 73,
-  };
+  });
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const navigate = useNavigate();
 
-  // Adjust star scale based on viewport size so that on small screens
-  // stars are easier to see and tap, while remaining reasonably sized
-  // on larger desktop displays.
+  // Adjust star scale and the effective vertical space of the SVG based on
+  // viewport size. On smaller screens we keep stars comfortably sized while
+  // expanding the vertical coordinate range and drag bounds so users can drag
+  // stars further up and down, even though horizontal room is limited.
   useEffect(() => {
-    const updateScale = () => {
+    const updateLayout = () => {
       if (typeof window === "undefined") return;
       const width = window.innerWidth;
-      const height = window.innerHeight;
 
-      if (width <= 480 || height <= 600) {
-        // Small phones / very short viewports
-        setStarScale(1.6);
-      } else if (width <= 900) {
-        // Tablets / small laptops
-        setStarScale(1.3);
+      // Compute responsive starScale and viewBoxHeight first so we can derive
+      // safe drag bounds that keep the full star (including glow) visible
+      // within the SVG without clipping, even on very large displays.
+      let nextScale: number;
+      let nextViewBoxHeight: number;
+
+      if (width <= 768) {
+        // Phones / small tablets: big stars with extra vertical space.
+        nextScale = 2;
+        nextViewBoxHeight = 110;
+      } else if (width <= 1200) {
+        // Medium screens / laptops: moderate stars.
+        nextScale = 1.1;
+        nextViewBoxHeight = 90;
       } else {
-        // Desktop and larger
-        setStarScale(1);
+        // Large desktop displays: slightly smaller stars so they don't feel huge.
+        nextScale = 0.9;
+        nextViewBoxHeight = 80;
       }
+
+      const glowRadius = 6 * nextScale; // matches constellation-star-glow r
+      const edgeMargin = 2; // small visual cushion inside the SVG border
+
+      const minX = glowRadius + edgeMargin;
+      const maxX = 100 - glowRadius - edgeMargin;
+      const minY = glowRadius + edgeMargin;
+      const maxY = nextViewBoxHeight - glowRadius - edgeMargin;
+
+      setStarScale(nextScale);
+      setViewBoxHeight(nextViewBoxHeight);
+      setDragBounds({
+        minX,
+        maxX,
+        minY,
+        maxY,
+      });
     };
 
-    updateScale();
-    window.addEventListener("resize", updateScale);
-    return () => window.removeEventListener("resize", updateScale);
+    updateLayout();
+    window.addEventListener("resize", updateLayout);
+    return () => window.removeEventListener("resize", updateLayout);
   }, []);
 
   const getSvgPoint = (
@@ -132,7 +155,7 @@ function Constellation() {
     if (!rect.width || !rect.height) return null;
 
     const x = ((clientX - rect.left) / rect.width) * 100;
-    const y = ((clientY - rect.top) / rect.height) * 80;
+    const y = ((clientY - rect.top) / rect.height) * viewBoxHeight;
     return { x, y };
   };
 
@@ -169,8 +192,14 @@ function Constellation() {
 
       const rawX = point.x - current.offsetX;
       const rawY = point.y - current.offsetY;
-      const clampedX = Math.max(DRAG_BOUNDS.minX, Math.min(DRAG_BOUNDS.maxX, rawX));
-      const clampedY = Math.max(DRAG_BOUNDS.minY, Math.min(DRAG_BOUNDS.maxY, rawY));
+      const clampedX = Math.max(
+        dragBounds.minX,
+        Math.min(dragBounds.maxX, rawX),
+      );
+      const clampedY = Math.max(
+        dragBounds.minY,
+        Math.min(dragBounds.maxY, rawY),
+      );
 
       setStars((prev) =>
         prev.map((star) =>
@@ -318,7 +347,7 @@ function Constellation() {
       <div className="constellation-container">
         <svg
           className="constellation-svg"
-          viewBox="0 0 100 80"
+          viewBox={`0 0 100 ${viewBoxHeight}`}
           role="img"
           aria-label="Interactive constellation of CurioCodex features"
           ref={svgRef}
@@ -339,6 +368,20 @@ function Constellation() {
             <radialGradient id="star-glow" cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor="rgba(255, 255, 255, 0.9)" />
               <stop offset="40%" stopColor="rgba(148, 187, 233, 0.8)" />
+              <stop offset="100%" stopColor="rgba(0, 0, 0, 0)" />
+            </radialGradient>
+
+            {/* Atlas (dashboard) star uses a distinct green glow to indicate the
+             * current page context. */}
+            <radialGradient id="star-core-atlas" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#eafffb" />
+              <stop offset="40%" stopColor="#6ee7b7" />
+              <stop offset="100%" stopColor="#22c55e" stopOpacity="0.15" />
+            </radialGradient>
+
+            <radialGradient id="star-glow-atlas" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="rgba(224, 255, 244, 0.95)" />
+              <stop offset="40%" stopColor="rgba(45, 212, 191, 0.85)" />
               <stop offset="100%" stopColor="rgba(0, 0, 0, 0)" />
             </radialGradient>
 
@@ -364,42 +407,54 @@ function Constellation() {
             );
           })}
 
-          {stars.map((star) => (
-            <g
-              key={star.id}
-              className="constellation-star"
-              transform={`translate(${star.x}, ${star.y})`}
-              onMouseDown={(event) => handleStarMouseDown(event, star.id)}
-              onTouchStart={(event) => handleStarTouchStart(event, star.id)}
-              onMouseUp={() => handleStarMouseUp(star.route)}
-              onTouchEnd={() => handleStarMouseUp(star.route)}
-              onKeyDown={(event) => handleKeyDown(event, star.route)}
-              tabIndex={0}
-              role="button"
-              aria-label={star.label}
-            >
-              <circle
-                className="constellation-star-glow"
-                r={4.5 * starScale}
-                fill="url(#star-glow)"
-                filter="url(#soft-glow)"
-              />
-              <circle
-                className="constellation-star-core"
-                r={1.4 * starScale}
-                fill="url(#star-core)"
-              />
-              <circle className="constellation-star-outline" r={2.4 * starScale} />
-              <text
-                className="constellation-star-label"
-                x={0}
-                y={7}
-                textAnchor="middle"
+          {stars.map((star) => {
+            const isAtlas = star.id === "dashboard";
+            // If a star is dragged near the bottom of the SVG, flip the label to
+            // render above the star instead of below so it doesn't get cut off.
+            const labelOffset = 9;
+            const isNearBottom = star.y > viewBoxHeight - (labelOffset + 4);
+            const labelY = isNearBottom ? -labelOffset : labelOffset;
+
+            return (
+              <g
+                key={star.id}
+                className="constellation-star"
+                transform={`translate(${star.x}, ${star.y})`}
+                onMouseDown={(event) => handleStarMouseDown(event, star.id)}
+                onTouchStart={(event) => handleStarTouchStart(event, star.id)}
+                onMouseUp={() => handleStarMouseUp(star.route)}
+                onTouchEnd={() => handleStarMouseUp(star.route)}
+                onKeyDown={(event) => handleKeyDown(event, star.route)}
+                tabIndex={0}
+                role="button"
+                aria-label={star.label}
               >
-                {star.label}
-              </text>
-            </g>
-          ))}
+                <circle
+                  className="constellation-star-glow"
+                  r={6 * starScale}
+                  fill={isAtlas ? "url(#star-glow-atlas)" : "url(#star-glow)"}
+                  filter="url(#soft-glow)"
+                />
+                <circle
+                  className="constellation-star-core"
+                  r={3 * starScale}
+                  fill={isAtlas ? "url(#star-core-atlas)" : "url(#star-core)"}
+                />
+                <circle
+                  className="constellation-star-outline"
+                  r={4 * starScale}
+                />
+                <text
+                  className="constellation-star-label"
+                  x={0}
+                  y={labelY}
+                  textAnchor="middle"
+                >
+                  {star.label}
+                </text>
+              </g>
+            );
+          })}
         </svg>
 
         <div className="constellation-controls">

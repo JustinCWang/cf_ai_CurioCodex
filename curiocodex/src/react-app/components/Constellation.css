@@ -190,11 +190,22 @@
 @media (max-width: 900px) {
   .constellation-section {
     max-width: 100%;
-    padding-inline: 0.5rem;
+    padding-inline: 0.25rem;
   }
 }
 
 @media (max-width: 768px) {
+  .constellation-section {
+    /* Remove additional centering/margins so the constellation element itself
+     * sits almost flush with the viewport edges on mobile. */
+    margin: 0;
+    width: 100%;
+  }
+
+  .constellation-container {
+    padding: 0.25rem;
+  }
+
   .constellation-star-label {
     font-size: 3.2px;
   }

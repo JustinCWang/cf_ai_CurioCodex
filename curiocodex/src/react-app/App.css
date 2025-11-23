@@ -317,6 +317,12 @@
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+  .main-content {
+    /* Reduce padding on mobile so the dashboard constellation can sit much
+     * closer to the screen edges. */
+    padding: 1rem 0.75rem 1.5rem;
+  }
+
   .header-center {
     display: none;
   }

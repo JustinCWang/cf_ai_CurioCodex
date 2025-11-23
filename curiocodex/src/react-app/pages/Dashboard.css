@@ -5,9 +5,28 @@
 .dashboard-page {
   height: calc(100vh - 80px - 64px);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
-  padding: 1rem 0.75rem;
+  padding: 0;
+  /* Pull the constellation up against the main-content padding so the
+   * visible border has only a very small margin to the viewport edges. */
+  margin: -2.5rem -2rem -3rem;
   overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .dashboard-page {
+    /* Match the mobile main-content padding so the constellation nearly
+     * touches the screen edges on phones as well. */
+    margin: -1rem -0.75rem -1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-page {
+    /* On mobile, minimize in-page padding so the constellation nearly touches
+     * the screen edges while still leaving a subtle cushion. */
+    padding: 0.25rem;
+  }
 }
 
