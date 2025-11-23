@@ -11,6 +11,121 @@
   gap: 1rem;
 }
 
+/* Search */
+.hobbies-search-form {
+  margin-bottom: 1.5rem;
+}
+
+.hobbies-search-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.mode-button {
+  background: transparent;
+  border-radius: 999px;
+  border: 1px solid rgba(138, 43, 226, 0.4);
+  color: #b8b8d4;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.2s ease;
+}
+
+.mode-button.active {
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.6) 0%, rgba(147, 112, 219, 0.6) 100%);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.mode-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mode-help {
+  font-size: 0.8rem;
+  color: #888;
+  font-style: italic;
+}
+
+.hobbies-search-input-container {
+  display: flex;
+  gap: 0.75rem;
+  max-width: 800px;
+  margin-bottom: 0.25rem;
+}
+
+.hobbies-search-input {
+  flex: 1;
+  background: rgba(26, 26, 46, 0.6);
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  border-radius: 12px;
+  padding: 0.75rem 1.25rem;
+  color: #e0e0e0;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: all 0.3s ease;
+}
+
+.hobbies-search-input:focus {
+  outline: none;
+  border-color: rgba(138, 43, 226, 0.6);
+  box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.1);
+}
+
+.hobbies-search-input::placeholder {
+  color: #888;
+}
+
+.hobbies-search-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hobbies-search-button,
+.hobbies-search-clear {
+  background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
+  border: none;
+  border-radius: 12px;
+  padding: 0.75rem 1.5rem;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.hobbies-search-clear {
+  background: rgba(55, 65, 81, 0.9);
+}
+
+.hobbies-search-button:hover:not(:disabled),
+.hobbies-search-clear:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(138, 43, 226, 0.4);
+}
+
+.hobbies-search-button:disabled,
+.hobbies-search-clear:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.hobbies-search-summary {
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
 .add-link-button {
   background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
   color: white;
@@ -57,6 +172,60 @@
   margin: 0 0 2rem;
 }
 
+/* Toolbar & View Toggle */
+.hobbies-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.hobbies-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 255, 0.6);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.6);
+}
+
+.view-toggle-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #e5e7eb;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.view-toggle-button:hover {
+  background: rgba(79, 70, 229, 0.2);
+}
+
+.view-toggle-button.active {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.5);
+}
+
+.view-toggle-icon {
+  font-size: 1rem;
+}
+
+.view-toggle-label {
+  font-weight: 500;
+}
+
+/* Grid View (Card) */
 .hobby-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -71,7 +240,10 @@
   padding: 1.5rem;
   transition: all 0.3s ease;
   backdrop-filter: blur(10px);
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 260px;
+  cursor: pointer;
 }
 
 .hobby-card:hover {
@@ -101,6 +273,9 @@
   font-size: 1.5rem;
   color: #9370db;
   margin: 0 0 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card-description {
@@ -108,13 +283,22 @@
   margin: 0.75rem 0;
   font-size: 0.95rem;
   line-height: 1.6;
+  line-clamp: 3;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  flex-grow: 1;
 }
 
 .card-category {
-  margin: 1rem 0 0.5rem;
+  margin: 0.5rem 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .category-label {
@@ -130,9 +314,13 @@
 
 .card-tags {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.5rem;
-  margin: 1rem 0;
+  margin: 0.5rem 0 1rem;
+  flex-shrink: 0;
+  height: 2rem;
+  overflow: hidden;
+  align-items: center;
 }
 
 .tag {
@@ -142,14 +330,26 @@
   padding: 0.25rem 0.75rem;
   font-size: 0.8rem;
   color: #ba55d3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.tag.more-tag {
+  background: transparent;
+  border-style: dashed;
+  color: #a5b4fc;
+  max-width: none;
 }
 
 .card-footer {
-  margin-top: 1.5rem;
+  margin-top: auto;
   padding-top: 1rem;
   border-top: 1px solid rgba(138, 43, 226, 0.2);
   position: relative;
   z-index: 1;
+  flex-shrink: 0;
 }
 
 .view-items-link {
@@ -177,6 +377,181 @@
   gap: 0.5rem;
 }
 
+/* List View */
+.hobbies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.hobby-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 255, 0.25);
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+}
+
+.hobby-row:hover {
+  border-color: rgba(129, 140, 248, 0.7);
+  background: rgba(15, 23, 42, 0.95);
+  transform: translateY(-1px);
+}
+
+.hobby-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.hobby-row-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.hobby-row-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.hobby-row-link:hover .hobby-row-name {
+  color: #9370db;
+  text-decoration: underline;
+}
+
+.hobby-row-category {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.1);
+  color: #fbbf24;
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  display: inline-block;
+  width: fit-content;
+}
+
+.hobby-row-description {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hobby-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.hobby-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: 200px;
+  justify-content: flex-end;
+}
+
+.hobby-row-tag {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #bfdbfe;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.hobby-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Icon View */
+.hobbies-grid-icon {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1.5rem;
+}
+
+.hobby-icon-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(129, 140, 248, 0.45);
+  background: radial-gradient(circle at top, rgba(129, 140, 248, 0.18), rgba(15, 23, 42, 0.95));
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  color: inherit;
+  text-decoration: none;
+}
+
+.hobby-icon-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 22px rgba(129, 140, 248, 0.55);
+  border-color: rgba(196, 181, 253, 0.9);
+}
+
+.hobby-icon-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(196, 181, 253, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, rgba(167, 139, 250, 0.35), rgba(15, 23, 42, 0.95));
+  font-size: 2rem;
+}
+
+.hobby-icon-fallback {
+  font-weight: 700;
+  color: #ede9fe;
+}
+
+.hobby-icon-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e5e7eb;
+  text-align: center;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hobby-icon-category {
+  font-size: 0.75rem;
+  color: #a5b4fc;
+  text-align: center;
+}
+
+.hobby-icon-actions {
+  display: flex;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.hobby-icon-card:hover .hobby-icon-actions {
+  opacity: 1;
+}
+
+/* Buttons */
 .edit-button,
 .delete-button {
   background: transparent;
@@ -327,19 +702,162 @@
   box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
 }
 
+/* Details Modal Specifics */
+.details-modal {
+    max-width: 600px;
+}
+
+.details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(138, 43, 226, 0.2);
+    padding-bottom: 1rem;
+}
+
+.details-header h2 {
+    margin: 0;
+    color: #9370db;
+    font-size: 2rem;
+    line-height: 1.2;
+}
+
+.close-button {
+    background: transparent;
+    border: none;
+    color: #b8b8d4;
+    font-size: 2rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 0.5rem;
+}
+
+.close-button:hover {
+  color: #fff;
+}
+
+.detail-section {
+    margin-bottom: 1.5rem;
+}
+
+.detail-section h3 {
+    font-size: 1.1rem;
+    color: #a5b4fc;
+    margin-bottom: 0.5rem;
+}
+
+.detail-description {
+    color: #e5e7eb;
+    line-height: 1.6;
+    font-size: 1rem;
+    white-space: pre-wrap;
+}
+
+.detail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.detail-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.detail-label {
+    color: #888;
+    font-size: 0.9rem;
+}
+
+.detail-value.badge {
+    background: rgba(250, 204, 21, 0.1);
+    color: #fbbf24;
+    border: 1px solid rgba(250, 204, 21, 0.3);
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-weight: 500;
+}
+
+.detail-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    justify-content: flex-end;
+}
+
+.primary-action-button {
+    background: linear-gradient(135deg, #8a2be2 0%, #9370db 100%);
+    color: white;
+    text-decoration: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.secondary-action-button {
+    background: rgba(26, 26, 46, 0.8);
+    border: 1px solid rgba(138, 43, 226, 0.5);
+    color: #b8b8d4;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.primary-action-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(138, 43, 226, 0.4);
+}
+
+.secondary-action-button:hover {
+    background: rgba(138, 43, 226, 0.1);
+    color: #fff;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .hobbies-header {
     flex-direction: column;
     align-items: stretch;
   }
+
+  .hobbies-search-input-container {
+    flex-direction: column;
+  }
   
   .add-link-button {
     text-align: center;
   }
 
+  .hobbies-toolbar {
+    justify-content: center;
+  }
+
   .hobby-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hobby-row {
+    grid-template-columns: minmax(0, 2fr) auto;
+    align-items: flex-start;
+  }
+  
+  .hobby-row-description {
+    display: none;
+  }
+  
+  .hobby-row-meta {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
   }
 
   .card-actions {
@@ -353,14 +871,16 @@
     width: 95%;
   }
 
-  .modal-actions {
+  .modal-actions, .detail-actions {
     flex-direction: column;
   }
 
   .cancel-button,
   .save-button,
-  .delete-confirm-button {
+  .delete-confirm-button,
+  .primary-action-button,
+  .secondary-action-button {
     width: 100%;
+    text-align: center;
   }
 }
-

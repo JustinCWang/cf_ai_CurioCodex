@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { apiRequest, parseResponse } from "../utils/api";
 import "./Items.css";
@@ -30,6 +30,17 @@ interface ItemsByHobby {
   items: Item[];
 }
 
+interface SearchItem {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  tags: string[];
+  created_at: number;
+  hobby_id: string;
+  similarity?: number;
+}
+
 function Items() {
   const [itemsByHobby, setItemsByHobby] = useState<ItemsByHobby[]>([]);
   const [hobbies, setHobbies] = useState<Hobby[]>([]);
@@ -43,12 +54,18 @@ function Items() {
   const [editHobbyCategory, setEditHobbyCategory] = useState<string | null>(null);
   const [editItemCategories, setEditItemCategories] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{ itemId: string; hobbyId: string } | null>(null);
-  const [testHobbyId, setTestHobbyId] = useState<string>("");
-  const [testHobbyCategory, setTestHobbyCategory] = useState<string | null>(null);
-  const [testItemCategories, setTestItemCategories] = useState<string[]>([]);
-  const [testLoading, setTestLoading] = useState(false);
-  const [testError, setTestError] = useState("");
   const [viewMode, setViewMode] = useState<"card" | "list" | "icon">("card");
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMode, setSearchMode] = useState<"semantic" | "text">("semantic");
+  const [searchItems, setSearchItems] = useState<SearchItem[] | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [searchMethod, setSearchMethod] = useState<"semantic" | "text" | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [filterHobbyId, setFilterHobbyId] = useState<string>("all");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const { hobbyId } = useParams<{ hobbyId?: string }>();
   const { token, isAuthenticated } = useAuth();
 
   const fetchAllItems = useCallback(async () => {
@@ -139,43 +156,6 @@ function Items() {
       setLoading(false);
     }
   }, [isAuthenticated, fetchAllItems]);
-
-  const fetchTestCategories = useCallback(
-    async (hobbyId: string) => {
-      if (!hobbyId) {
-        setTestHobbyCategory(null);
-        setTestItemCategories([]);
-        setTestError("");
-        return;
-      }
-
-      try {
-        setTestLoading(true);
-        setTestError("");
-        const response = await apiRequest(
-          `/api/hobbies/${hobbyId}/item-categories`,
-          { method: "GET" },
-          token
-        );
-        const data = await parseResponse<{
-          hobbyCategory: string | null;
-          itemCategories: string[];
-        }>(response);
-        setTestHobbyCategory(data.hobbyCategory);
-        setTestItemCategories(data.itemCategories);
-      } catch (err) {
-        console.error("Error fetching categories for tester:", err);
-        const message =
-          err instanceof Error ? err.message : "Failed to load categories";
-        setTestError(message);
-        setTestHobbyCategory(null);
-        setTestItemCategories([]);
-      } finally {
-        setTestLoading(false);
-      }
-    },
-    [token]
-  );
 
   const handleEdit = async (item: Item, hobbyId: string) => {
     setEditingItem({ item, hobbyId });
@@ -271,7 +251,190 @@ function Items() {
     }
   };
 
-  const totalItems = itemsByHobby.reduce((sum, group) => sum + group.items.length, 0);
+  const handleItemSearch = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+
+      const trimmed = searchQuery.trim();
+      if (!trimmed) {
+        // Clear search and show normal grouped view
+        setHasSearched(false);
+        setSearchItems(null);
+        setSearchError("");
+        setSearchMethod(null);
+        return;
+      }
+
+      try {
+        setSearchLoading(true);
+        setSearchError("");
+        setHasSearched(true);
+
+        const response = await apiRequest(
+          "/api/search",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              query: trimmed,
+              limit: 40,
+              mode: searchMode,
+            }),
+          },
+          token
+        );
+
+        const data = await parseResponse<{
+          items: SearchItem[];
+          searchMethod: "semantic" | "text";
+        }>(response);
+
+        setSearchItems(data.items || []);
+        setSearchMethod(data.searchMethod);
+      } catch (err) {
+        console.error("Error searching items:", err);
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to search items";
+        setSearchError(errorMessage);
+        setSearchItems(null);
+        setSearchMethod(null);
+      } finally {
+        setSearchLoading(false);
+      }
+    },
+    [searchQuery, searchMode, token]
+  );
+
+  // Determine which hobby is "active" for filter and category purposes
+  const activeHobbyIdForFilters =
+    hobbyId || (filterHobbyId !== "all" ? filterHobbyId : null);
+
+  // Build category list scoped to the active hobby when present, or all hobbies otherwise
+  const categorySet = new Set<string>();
+  if (activeHobbyIdForFilters) {
+    const group = itemsByHobby.find((g) => g.hobby.id === activeHobbyIdForFilters);
+    if (group) {
+      group.items.forEach((item) => {
+        if (item.category && item.category.trim()) {
+          categorySet.add(item.category.trim());
+        }
+      });
+    }
+  } else {
+    itemsByHobby.forEach((group) => {
+      group.items.forEach((item) => {
+        if (item.category && item.category.trim()) {
+          categorySet.add(item.category.trim());
+        }
+      });
+    });
+  }
+  const allCategories = Array.from(categorySet).sort((a, b) =>
+    a.localeCompare(b)
+  );
+
+  // Ensure selected category stays valid when the active hobby (and its categories)
+  // change due to route (/hobbies/:id/items) or hobby filter dropdown.
+  useEffect(() => {
+    if (filterCategory === "all") return;
+    if (!allCategories.includes(filterCategory)) {
+      setFilterCategory("all");
+    }
+  }, [allCategories, filterCategory]);
+
+  // Filter items by route hobby (if present) and UI filters
+  let filteredGroups: ItemsByHobby[] = itemsByHobby.filter((group) => {
+    // If we're on /hobbies/:hobbyId/items, always lock to that hobby
+    if (hobbyId && group.hobby.id !== hobbyId) return false;
+    // Otherwise respect the hobby filter dropdown
+    if (!hobbyId && filterHobbyId !== "all" && group.hobby.id !== filterHobbyId)
+      return false;
+    return true;
+  });
+
+  if (filterCategory !== "all") {
+    filteredGroups = filteredGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter(
+          (item) => item.category && item.category === filterCategory
+        ),
+      }))
+      .filter((group) => group.items.length > 0);
+  }
+
+  const isSearching = hasSearched && !!searchQuery.trim();
+
+  let searchGroups: ItemsByHobby[] = [];
+  if (isSearching && searchItems) {
+    const hobbiesById = new Map(hobbies.map((h) => [h.id, h]));
+    const byHobby = new Map<string, ItemsByHobby>();
+
+    searchItems.forEach((result) => {
+      // Respect route hobby filter if present
+      if (hobbyId && result.hobby_id !== hobbyId) {
+        return;
+      }
+      // Otherwise apply hobby filter dropdown
+      if (!hobbyId && filterHobbyId !== "all" && result.hobby_id !== filterHobbyId) {
+        return;
+      }
+
+      const existing = byHobby.get(result.hobby_id);
+      if (!existing) {
+        const hobbyMeta = hobbiesById.get(result.hobby_id);
+        const hobby: Hobby = {
+          id: result.hobby_id,
+          name: hobbyMeta?.name || "Unknown Hobby",
+          category: hobbyMeta?.category ?? null,
+        };
+        byHobby.set(result.hobby_id, {
+          hobby,
+          items: [],
+        });
+      }
+
+      const group = byHobby.get(result.hobby_id)!;
+      group.items.push({
+        id: result.id,
+        name: result.name,
+        description: result.description,
+        category: result.category,
+        tags: result.tags || [],
+        image_url: null,
+        created_at: result.created_at,
+        hobby_id: result.hobby_id,
+      });
+    });
+
+    let groups = Array.from(byHobby.values());
+
+    if (filterCategory !== "all") {
+      groups = groups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter(
+            (item) => item.category && item.category === filterCategory
+          ),
+        }))
+        .filter((group) => group.items.length > 0);
+    }
+
+    searchGroups = groups;
+  }
+
+  const groupsToRender: ItemsByHobby[] = isSearching ? searchGroups : filteredGroups;
+
+  const totalItems = groupsToRender.reduce(
+    (sum, group) => sum + group.items.length,
+    0
+  );
+
+  const activeHobbyId =
+    hobbyId || (filterHobbyId !== "all" ? filterHobbyId : null);
+  const activeHobby =
+    activeHobbyId && hobbies.length > 0
+      ? hobbies.find((h) => h.id === activeHobbyId) || null
+      : null;
 
   if (!isAuthenticated) {
     return (
@@ -300,160 +463,122 @@ function Items() {
       <h1>Items</h1>
       <div className="page-content">
         <div className="items-header">
-          <p>Browse items across all your hobbies.</p>
+          <p>
+            {activeHobby
+              ? `Browse items in "${activeHobby.name}".`
+              : "Browse items across all your hobbies."}
+          </p>
           <Link to="/add" className="add-link-button">
             📦 Add New Item
           </Link>
         </div>
 
-        {/* Category testing panel */}
-        {hobbies.length > 0 && (
-          <div
-            style={{
-              marginBottom: "1.5rem",
-              padding: "1rem 1.25rem",
-              borderRadius: "0.75rem",
-              background: "rgba(15, 15, 35, 0.85)",
-              border: "1px solid rgba(148, 163, 255, 0.4)",
-              boxShadow: "0 12px 30px rgba(15, 23, 42, 0.7)",
-            }}
-          >
-            <h2
-              style={{
-                margin: "0 0 0.75rem 0",
-                fontSize: "1.05rem",
-                fontWeight: 600,
-              }}
+        {/* Item search (semantic / text) */}
+        <form onSubmit={handleItemSearch} className="items-search-form">
+          <div className="items-search-mode-toggle">
+            <button
+              type="button"
+              className={`mode-button ${searchMode === "semantic" ? "active" : ""}`}
+              onClick={() => setSearchMode("semantic")}
+              disabled={searchLoading}
             >
-              Category Tester
-            </h2>
-            <p
-              style={{
-                margin: "0 0 0.75rem 0",
-                fontSize: "0.85rem",
-                color: "#9ca3af",
-              }}
+              🧠 Semantic
+            </button>
+            <button
+              type="button"
+              className={`mode-button ${searchMode === "text" ? "active" : ""}`}
+              onClick={() => setSearchMode("text")}
+              disabled={searchLoading}
             >
-              Pick a hobby to see its main category and all item categories that
-              are currently in use. New items will inherit the hobby category
-              when you leave the item category empty.
-            </p>
+              🔤 Text
+            </button>
+            <span className="mode-help">
+              {searchMode === "semantic"
+                ? "AI-powered search by meaning (falls back to text if needed)."
+                : "Simple keyword search only."}
+            </span>
+          </div>
 
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "0.75rem",
-                alignItems: "center",
-                marginBottom: "0.75rem",
-              }}
+          <div className="items-search-input-container">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search your items..."
+              className="items-search-input"
+              disabled={searchLoading}
+            />
+            <button
+              type="submit"
+              className="items-search-button"
+              disabled={searchLoading}
             >
-              <label
-                htmlFor="category-tester-hobby"
-                style={{ fontSize: "0.9rem" }}
-              >
-                Hobby:
-              </label>
-              <select
-                id="category-tester-hobby"
-                value={testHobbyId}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setTestHobbyId(value);
-                  fetchTestCategories(value);
+              {searchLoading ? "🔍 Searching..." : "🔍 Search"}
+            </button>
+            {isSearching && (
+              <button
+                type="button"
+                className="items-search-clear"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSearchItems(null);
+                  setHasSearched(false);
+                  setSearchError("");
+                  setSearchMethod(null);
                 }}
-                className="form-input"
-                style={{ maxWidth: "260px" }}
+                disabled={searchLoading}
               >
-                <option value="">Select a hobby…</option>
+                Clear
+              </button>
+            )}
+          </div>
+        </form>
+
+        {searchError && (
+          <div className="error-message" style={{ marginTop: "0.75rem" }}>
+            {searchError}
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="items-filters">
+          <div className="items-filter-group">
+            <label className="items-filter-label">Hobby</label>
+            {hobbyId ? (
+              <div className="items-filter-value">
+                {activeHobby ? activeHobby.name : "This hobby"}
+              </div>
+            ) : (
+              <select
+                className="items-filter-select"
+                value={filterHobbyId}
+                onChange={(e) => setFilterHobbyId(e.target.value)}
+              >
+                <option value="all">All hobbies</option>
                 {hobbies.map((hobby) => (
                   <option key={hobby.id} value={hobby.id}>
                     {hobby.name}
                   </option>
                 ))}
               </select>
-              {testLoading && (
-                <span style={{ fontSize: "0.85rem", color: "#a5b4fc" }}>
-                  Loading categories…
-                </span>
-              )}
-            </div>
-
-            {testError && (
-              <div className="error-message" style={{ marginBottom: "0.75rem" }}>
-                {testError}
-              </div>
-            )}
-
-            {testHobbyId && !testError && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.4rem",
-                  fontSize: "0.85rem",
-                }}
-              >
-                <div>
-                  <span
-                    style={{
-                      fontWeight: 600,
-                      color: "#e5e7eb",
-                      marginRight: "0.35rem",
-                    }}
-                  >
-                    Hobby category:
-                  </span>
-                  <span style={{ color: "#c4b5fd" }}>
-                    {testHobbyCategory && testHobbyCategory.trim()
-                      ? testHobbyCategory
-                      : "None (AI / uncategorized)"}
-                  </span>
-                </div>
-                <div>
-                  <span
-                    style={{
-                      fontWeight: 600,
-                      color: "#e5e7eb",
-                      marginRight: "0.35rem",
-                    }}
-                  >
-                    Item categories in this hobby:
-                  </span>
-                  {testItemCategories.length === 0 ? (
-                    <span style={{ color: "#9ca3af" }}>
-                      None yet. When you add items and set custom categories,
-                      they will appear here and be reused for auto-categorization.
-                    </span>
-                  ) : (
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        flexWrap: "wrap",
-                        gap: "0.35rem",
-                      }}
-                    >
-                      {testItemCategories.map((cat) => (
-                        <span
-                          key={cat}
-                          style={{
-                            padding: "0.15rem 0.45rem",
-                            borderRadius: "999px",
-                            background: "rgba(79, 70, 229, 0.25)",
-                            border: "1px solid rgba(129, 140, 248, 0.7)",
-                            color: "#e0e7ff",
-                          }}
-                        >
-                          {cat}
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                </div>
-              </div>
             )}
           </div>
-        )}
+          <div className="items-filter-group">
+            <label className="items-filter-label">Category</label>
+            <select
+              className="items-filter-select"
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+            >
+              <option value="all">All categories</option>
+              {allCategories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
 
         {error && <div className="error-message">{error}</div>}
 
@@ -461,7 +586,8 @@ function Items() {
           <div className="items-toolbar-summary">
             <span className="items-total">
               {totalItems} item{totalItems !== 1 ? "s" : ""} across{" "}
-              {itemsByHobby.length} hobbie{itemsByHobby.length !== 1 ? "s" : ""}
+              {filteredGroups.length} hobbie
+              {filteredGroups.length !== 1 ? "s" : ""}
             </span>
           </div>
           <div
@@ -517,9 +643,24 @@ function Items() {
             </Link>
           </div>
         ) : (
-          <div className="items-container">
-            {itemsByHobby.map((group) => (
-              <div key={group.hobby.id} className="hobby-section">
+          <>
+            {isSearching && (
+              <div className="items-search-summary">
+                <span>
+                  Showing {totalItems} item{totalItems !== 1 ? "s" : ""}{" "}
+                  {activeHobby
+                    ? `in "${activeHobby.name}"`
+                    : "across your hobbies"}
+                  {searchMethod
+                    ? ` · ${searchMethod === "semantic" ? "Semantic" : "Text"} search`
+                    : ""}
+                </span>
+              </div>
+            )}
+
+            <div className="items-container">
+              {groupsToRender.map((group) => (
+                <div key={group.hobby.id} className="hobby-section">
                 <div className="hobby-section-header">
                   <h2 className="hobby-section-title">
                     <Link to={`/hobbies/${group.hobby.id}/items`} className="hobby-link">
@@ -531,22 +672,20 @@ function Items() {
                 {viewMode === "card" && (
                   <div className="items-grid items-grid-card">
                     {group.items.map((item) => (
-                      <div key={item.id} className="item-card">
+                      <div
+                        key={item.id}
+                        className="item-card"
+                        onClick={() => setSelectedItem(item)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            setSelectedItem(item);
+                          }
+                        }}
+                        style={{ cursor: "pointer" }}
+                      >
                         <div className="card-glow"></div>
-                        {item.image_url && (
-                          <div className="item-image-container">
-                            <img
-                              src={item.image_url}
-                              alt={item.name}
-                              className="item-image"
-                              onError={(e) => {
-                                // Hide image on error
-                                (e.target as HTMLImageElement).style.display =
-                                  "none";
-                              }}
-                            />
-                          </div>
-                        )}
                         <h3>{item.name}</h3>
                         {item.description && (
                           <p className="card-description">{item.description}</p>
@@ -561,30 +700,37 @@ function Items() {
                         )}
                         {item.tags && item.tags.length > 0 && (
                           <div className="card-tags">
-                            {item.tags.map((tag, index) => (
+                            {item.tags.slice(0, 2).map((tag, index) => (
                               <span key={index} className="tag">
                                 #{tag}
                               </span>
                             ))}
+                            {item.tags.length > 2 && (
+                              <span className="tag more-tag">+{item.tags.length - 2} tags</span>
+                            )}
                           </div>
                         )}
                         <div className="card-footer">
                           <div className="action-buttons">
                             <button
                               className="edit-button"
-                              onClick={() => handleEdit(item, group.hobby.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(item, group.hobby.id);
+                              }}
                               title="Edit item"
                             >
                               ✏️
                             </button>
                             <button
                               className="delete-button"
-                              onClick={() =>
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setDeleteConfirm({
                                   itemId: item.id,
                                   hobbyId: group.hobby.id,
-                                })
-                              }
+                                });
+                              }}
                               title="Delete item"
                             >
                               🗑️
@@ -707,8 +853,99 @@ function Items() {
                     ))}
                   </div>
                 )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Details Modal */}
+        {selectedItem && (
+          <div
+            className="modal-overlay"
+            onClick={() => setSelectedItem(null)}
+          >
+            <div
+              className="modal-content details-modal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="details-header">
+                <h2>{selectedItem.name}</h2>
+                <button
+                  className="close-button"
+                  onClick={() => setSelectedItem(null)}
+                  aria-label="Close details"
+                >
+                  ×
+                </button>
               </div>
-            ))}
+
+              <div className="details-body">
+                {selectedItem.image_url && (
+                  <div className="detail-image-container">
+                    <img
+                      src={selectedItem.image_url}
+                      alt={selectedItem.name}
+                      className="detail-image"
+                    />
+                  </div>
+                )}
+
+                {selectedItem.category && (
+                  <div className="detail-row">
+                    <span className="detail-label">Category</span>
+                    <span className="detail-value badge">
+                      {selectedItem.category}
+                    </span>
+                  </div>
+                )}
+
+                <div className="detail-section">
+                  <h3>Description</h3>
+                  <p className="detail-description">
+                    {selectedItem.description || "No description provided."}
+                  </p>
+                </div>
+
+                {selectedItem.tags && selectedItem.tags.length > 0 && (
+                  <div className="detail-section">
+                    <h3>Tags</h3>
+                    <div className="detail-tags">
+                      {selectedItem.tags.map((tag, index) => (
+                        <span key={index} className="tag">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="detail-actions">
+                  <button
+                    className="secondary-action-button"
+                    onClick={() => {
+                      // Note: In ItemsByHobby loop, we have group.hobby.id. 
+                      // But here we just have selectedItem which might not have hobby_id populated if it came from elsewhere, 
+                      // but in Items page we know the hobby context usually.
+                      // Actually, the Item interface has optional hobby_id.
+                      // Let's find the hobby id from the groups if needed.
+                      let hid = selectedItem.hobby_id;
+                      if (!hid) {
+                         const group = itemsByHobby.find(g => g.items.some(i => i.id === selectedItem.id));
+                         if (group) hid = group.hobby.id;
+                      }
+                      
+                      if (hid) {
+                        handleEdit(selectedItem, hid);
+                        setSelectedItem(null);
+                      }
+                    }}
+                  >
+                    Edit Item
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

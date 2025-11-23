@@ -70,6 +70,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/hobbies" element={<Hobbies />} />
+              <Route path="/hobbies/:hobbyId/items" element={<Items />} />
               <Route path="/items" element={<Items />} />
               <Route path="/add" element={<Add />} />
               <Route path="/discover" element={<Discover />} />

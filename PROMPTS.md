@@ -33,3 +33,5 @@ Can generate me some basic CSS styling and UI for the basic Item display setting
 I modified some styling and added a picture I got that I want to use as the background. Can you help me refine the consellation altas dashboard, refine the header with modern UI elements, and remove all unnecessary descriptions? Can you propagate these changes to the whole web app as well?
 
 I want to make the constellation UI interactive and allow users to move each star around how they like. What imports would I need and what are the basics of detecting user mouse input?
+
+Can you help me clean up my UI and Debugging tools? I want to move some things around and reformat a few inconsistencies. I need to move the search feature from the discover page to the item & hobby pages. We should update the backend and frontend. 

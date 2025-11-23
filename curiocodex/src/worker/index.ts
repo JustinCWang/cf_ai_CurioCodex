@@ -1666,11 +1666,7 @@ app.get("/api/discover/by-category/:category", async (c) => {
   return c.json({ hobbies: hobbiesWithParsedTags });
 });
 
-/**
- * POST /api/discover/search
- * Semantic search across user's hobbies and items using Vectorize.
- */
-app.post("/api/discover/search", async (c) => {
+async function handleCollectionSearch(c: AppContext) {
   const user = c.get("user");
   const { query, limit = 20, mode } = await c.req.json<{
     query?: string;
@@ -1866,7 +1862,19 @@ app.post("/api/discover/search", async (c) => {
     console.error("Error performing semantic search:", error);
     return c.json({ error: "Failed to perform search" }, 500);
   }
-});
+}
+
+/**
+ * POST /api/search
+ * Primary endpoint for semantic/text search across the user's hobbies and items.
+ */
+app.post("/api/search", (c) => handleCollectionSearch(c));
+
+/**
+ * POST /api/discover/search
+ * Legacy alias for collection search, kept for backward compatibility.
+ */
+app.post("/api/discover/search", (c) => handleCollectionSearch(c));
 
 /**
  * POST /api/admin/repair-vectorize-metadata
